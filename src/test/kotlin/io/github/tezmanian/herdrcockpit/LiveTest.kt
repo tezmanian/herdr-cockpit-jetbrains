@@ -44,4 +44,44 @@ class LiveTest {
         // The pane is still there in Herdr.
         assertTrue(normalize(client.request("session.snapshot")).find(pane.id) != null)
     }
+
+    @Test
+    fun createSpaceTabAndWorktree() {
+        assumeTrue("HERDR_LIVE_SOCKET not set", socket != null)
+        val client = HerdrClient { socket!! }
+        val actions = HerdrActions(client)
+        val repo = java.nio.file.Files.createTempDirectory("hc-live-repo").toFile()
+        fun git(vararg a: String) = ProcessBuilder(listOf("git", "-C", repo.path) + a).redirectErrorStream(true).start().waitFor()
+        git("init", "-q", "-b", "main")
+        java.io.File(repo, "README.md").writeText("hc\n")
+        git("add", ".")
+        git("-c", "user.name=hc", "-c", "user.email=hc@example.invalid", "commit", "-qm", "init")
+        val label = "hc-live-${System.nanoTime() % 100000}"
+        val closeSpace = { id: String -> client.request("workspace.close", com.google.gson.JsonObject().apply { addProperty("workspace_id", id); addProperty("close_group", true) }) }
+
+        val space = actions.createSpace(repo.path, label)
+        try {
+            val m = normalize(client.request("session.snapshot"))
+            assertTrue("new space is listed", m.space(space.workspaceId)?.label == label)
+            assertTrue("new space isn't focused", m.focusedSpaceId != space.workspaceId)
+
+            val tab = actions.createTab(space.workspaceId!!, repo.path, "Shell 2")
+            actions.renameTab(tab.tabId!!, "renamed")
+            val (sp, p) = normalize(client.request("session.snapshot")).find(tab.paneId)!!
+            assertTrue(sp.id == space.workspaceId && sp.tabs.first { it.id == p.tabId }.label == "renamed")
+
+            val wt = actions.createWorktreeSpace(space.workspaceId, "hc/live", "hc/live")
+            try {
+                val w = normalize(client.request("session.snapshot")).space(wt.workspaceId)!!
+                assertTrue("worktree space: ${w.cwd}", w.linkedWorktree && w.cwd != null && w.cwd != repo.path)
+            } finally {
+                client.request("worktree.remove", com.google.gson.JsonObject().apply { addProperty("workspace_id", wt.workspaceId); addProperty("force", true) }, 30_000)
+            }
+        } finally {
+            closeSpace(space.workspaceId!!)
+            repo.deleteRecursively()
+            // Herdr leaves the (now empty) ~/.herdr/worktrees/<repo> folder behind.
+            java.io.File(System.getProperty("user.home"), ".herdr/worktrees/${repo.name}").delete()
+        }
+    }
 }

@@ -21,11 +21,16 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   program keeps running in Herdr.
 - Live updates via `events.subscribe` (re-snapshot on every event, 5 s safety poll), notifications when an agent is
   blocked or done, follow mode (Herdr's focus moves → the IDE follows, in projects you switched from the IDE).
-- Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, switching behaviour, notifications).
+- **New space** (`+` next to "Spaces"): in a folder you pick, or on a new git worktree (and branch) of an existing
+  space's repository. **New tab** (in every space): a shell, a named shell, or an agent (your favorites first, the
+  rest under "More agents…"). The new pane opens as an editor tab right away; an agent is started in it in the
+  background. Herdr's own focus doesn't jump (`focus:false`).
+- Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, switching behaviour, notifications, agents offered
+  for new tabs).
 
 ## Not ported yet
 
-New space / new tab / rename / close in Herdr, Review changes (diff view), plan usage (Claude/Codex/Kiro), the
+Rename / close in Herdr, Review changes (diff view), plan usage (Claude/Codex/Kiro), the
 Herdr plugin for jumping from Herdr to the IDE (deep links), Open Herdr TUI, right-click menus in the sidebar.
 These buttons exist in the sidebar but show "not available in the JetBrains port yet".
 

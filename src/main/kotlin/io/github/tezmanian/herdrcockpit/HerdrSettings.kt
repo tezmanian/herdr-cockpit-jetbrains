@@ -35,6 +35,8 @@ class HerdrSettingsState : BaseState() {
     var showShells by property(true)
     var notifyBlocked by property(true)
     var notifyDone by property(true)
+    /** Agents offered first for a new tab (any kind `herdr agent start --kind` accepts). */
+    var agents by string("claude, codex, kiro, cursor")
 }
 
 @Service(Service.Level.APP)
@@ -70,6 +72,12 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row { checkBox("Show shell panes").bindSelected(s::showShells) }
                 row { checkBox("Notify when an agent is blocked").bindSelected(s::notifyBlocked) }
                 row { checkBox("Notify when an agent is done").bindSelected(s::notifyDone) }
+            }
+            group("New tabs") {
+                row("Agents:") {
+                    textField().bindText({ s.agents ?: "" }, { s.agents = it }).columns(COLUMNS_LARGE)
+                        .comment("Listed first when you create a tab, comma-separated: ${AGENT_KINDS.keys.joinToString(", ")}. The rest are under \"More agents…\".")
+                }
             }
         }
     }

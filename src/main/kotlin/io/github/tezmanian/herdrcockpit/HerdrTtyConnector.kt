@@ -122,7 +122,9 @@ class HerdrTtyConnector(
             }
             // After the stream ended, keep JediTerm's emulator idle (returning -1 would make it close the
             // widget and hide the note above).
-            current = chunks.poll(200, TimeUnit.MILLISECONDS) ?: if (closedByUser) return -1 else continue
+            // JediTerm interrupts this thread when the tab closes.
+            current = try { chunks.poll(200, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { return -1 }
+                ?: if (closedByUser) return -1 else continue
             pos = 0
         }
     }

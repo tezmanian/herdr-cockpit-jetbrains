@@ -58,6 +58,8 @@ class HerdrService(private val project: Project) : Disposable {
     private val loop = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-loop").apply { isDaemon = true } }
     private val activityExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-activity-loop").apply { isDaemon = true } }
     private val client = HerdrClient { socketPath() }
+    val actions = HerdrActions(client)
+    private val manage = HerdrManage(project, this)
     private val activity = ActivityWatcher(client)
     private val git = GitCache { scheduleRender() }
     private val logLines = ArrayDeque<String>()
@@ -106,6 +108,24 @@ class HerdrService(private val project: Project) : Disposable {
             logLines.addLast("${java.time.LocalTime.now().withNano(0)} $line")
             while (logLines.size > 200) logLines.removeFirst()
         }
+    }
+
+    fun currentModel(): Model? = model
+    fun isConnected(): Boolean = conn is Conn.Connected
+
+    /** The current git branch of a space's folder (cached; none in untrusted projects). */
+    fun branchOf(cwd: String?): String? = if (TrustedProjects.isProjectTrusted(project)) git.get(cwd)?.branch else null
+
+    /** Re-reads the snapshot until a pane Herdr just created shows up (normally right away). Not on the EDT. */
+    fun awaitPane(paneId: String): Pair<Space, Pane>? {
+        repeat(20) { i ->
+            runCatching { normalize(client.request("session.snapshot")).find(paneId) }.getOrNull()?.let {
+                scheduleRefresh(0)
+                return it
+            }
+            if (i < 19) Thread.sleep(150)
+        }
+        return null
     }
 
     fun settingsChanged() = loop.execute { guard { refresh(); render() } }
@@ -342,7 +362,13 @@ class HerdrService(private val project: Project) : Disposable {
         if (isMounted(space)) return true
         val module = ModuleManager.getInstance(project).modules.firstOrNull()
             ?: return false.also { notify("This project has no module to add ${space.label}'s folder to.", NotificationType.WARNING) }
-        val dir = LocalFileSystem.getInstance().refreshAndFindFileByPath(cwd) ?: return false
+        val dir = LocalFileSystem.getInstance().findFileByPath(cwd) ?: run {
+            // A folder the IDE hasn't seen yet (e.g. a new worktree): load it off the EDT, then try again.
+            ApplicationManager.getApplication().executeOnPooledThread {
+                if (LocalFileSystem.getInstance().refreshAndFindFileByPath(cwd) != null) edt { mount(space) }
+            }
+            return false
+        }
         val ours = mountedRoots()
         ModuleRootModificationUtil.updateModel(module) { m ->
             for (e in m.contentEntries) if (e.url in ours && e.file?.path != cwd) m.removeContentEntry(e)
@@ -416,6 +442,8 @@ class HerdrService(private val project: Project) : Disposable {
             "openInstallDocs" -> BrowserUtil.browse("https://herdr.dev")
             "openSettings" -> ShowSettingsUtil.getInstance().showSettingsDialog(project, HerdrConfigurable::class.java)
             "copyDiagnostics" -> copyDiagnostics()
+            "newSpace" -> manage.newSpace()
+            "newTab" -> m?.space(spaceId)?.let { manage.newTab(it) }
             "openTui" -> notify("Run <code>herdr</code> in a terminal to open the Herdr TUI.", NotificationType.INFORMATION)
             else -> notify("\"$command\" isn't available in the JetBrains port yet.", NotificationType.INFORMATION)
         }
@@ -473,7 +501,7 @@ class HerdrService(private val project: Project) : Disposable {
 
     fun showToolWindow() = ToolWindowManager.getInstance(project).getToolWindow("Herdr")?.show()
 
-    private fun notify(html: String, type: NotificationType) = ApplicationManager.getApplication().invokeLater {
+    fun notify(html: String, type: NotificationType) = ApplicationManager.getApplication().invokeLater {
         if (!project.isDisposed) NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit").createNotification(html, type).notify(project)
     }
 
