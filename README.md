@@ -43,7 +43,7 @@ Install in PhpStorm: *Settings | Plugins | ⚙ | Install Plugin from Disk…* an
 
 ### CI
 
-`.github/workflows/build.yml` runs on GitHub and on Gitea Actions (Gitea reads `.github/workflows`): tests and
+`.github/workflows/build.yml` (GitHub) and `.gitea/workflows/build.yml` (Gitea, in the `jdk21-runner` image from Development/CI-Runner; Gitea ignores `.github/workflows` while `.gitea/workflows` exists): tests and
 `buildPlugin` (the zip is uploaded as the `herdr-cockpit-plugin` artifact), then `verifyPlugin`, the JetBrains Plugin
 Verifier against PhpStorm 2025.3.6.1 and 2026.2.3. A tag `v<version>` on GitHub also publishes a release with the zip.
 Locally: `./gradlew verifyPlugin` (downloads both PhpStorm versions once).

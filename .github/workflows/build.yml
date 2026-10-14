@@ -1,5 +1,5 @@
-# Builds, tests and verifies the plugin. Runs on GitHub and on Gitea Actions (Gitea reads .github/workflows
-# when there is no .gitea/workflows). A tag v<version> also publishes a GitHub release with the plugin zip.
+# Builds, tests and verifies the plugin on GitHub. (Gitea runs .gitea/workflows/build.yml instead, which takes
+# precedence there.) A tag v<version> also publishes a GitHub release with the plugin zip.
 name: Build
 
 on:

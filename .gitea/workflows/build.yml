@@ -1,0 +1,57 @@
+# Gitea Actions build (Gitea runs .gitea/workflows and then ignores .github/workflows; GitHub does the opposite).
+# Same steps as .github/workflows/build.yml, in the jdk21-runner image from Development/CI-Runner
+# (Temurin 21 + Node 24), so no JDK download per run. Needs the REGISTRY_USER / REGISTRY_PASSWORD secrets.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: gitea.root-zone.info/development/jdk21-runner:latest
+      credentials:
+        username: ${{ secrets.REGISTRY_USER }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+      - name: Test and build
+        run: ./gradlew test buildPlugin --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: herdr-cockpit-plugin
+          path: build/distributions/*.zip
+          if-no-files-found: error
+
+  verify:
+    # JetBrains Plugin Verifier against PhpStorm 2025.3.6.1 and 2026.2.3 (each IDE ~1 GB, kept in the cache).
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: gitea.root-zone.info/development/jdk21-runner:latest
+      credentials:
+        username: ${{ secrets.REGISTRY_USER }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-verify-${{ hashFiles('**/*.gradle.kts', 'gradle.properties', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-verify-
+      - name: Verify against PhpStorm
+        run: ./gradlew verifyPlugin --console=plain
