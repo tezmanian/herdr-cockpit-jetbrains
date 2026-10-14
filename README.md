@@ -31,15 +31,19 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
   HEAD ↔ working tree diffs in one diff view (step through the files with the arrows). Uses the git CLI, so it also
   works for spaces that aren't mounted; only in trusted projects.
+- **Usage** (top of the sidebar) for the agents running in Herdr right now, read from their local files once a minute
+  while the sidebar is visible: Claude Code (5-hour/weekly plan limits once you allow the opt-in status line via
+  "Show plan limits…", which never replaces an existing one; tokens of the current 5-hour session), Codex (live from
+  `codex app-server`, at most every 5 minutes, else its session logs), Kiro (credits this month/today; the allowance
+  is the setting "Kiro monthly credits"). Nothing leaves the machine.
 - Optional: closing a pane's editor tab yourself also closes it in Herdr (setting "Closing a pane's tab yourself":
   never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
 - Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, switching behaviour, notifications, agents offered
-  for new tabs, closing tabs).
+  for new tabs, closing tabs, Kiro monthly credits).
 
 ## Not ported yet
 
-Plan usage (Claude/Codex/Kiro), the
-Herdr plugin for jumping from Herdr to the IDE (deep links), Open Herdr TUI.
+The Herdr plugin for jumping from Herdr to the IDE (deep links), Open Herdr TUI.
 These buttons exist in the sidebar but show "not available in the JetBrains port yet".
 
 ## Build and install
@@ -82,6 +86,7 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `Model.kt` | `normalize()`: flat `session.snapshot` → Space → Tab → Pane |
 | `Connection.kt` | finding `herdr`, `diagnose()`, `startServer()` (detached, clean env), backoff |
 | `Activity.kt` | shell/agent summaries from `pane.process_info` + `pane.read` |
+| `Usage.kt` | plan usage of Claude Code, Codex and Kiro from their local files (port of `usage.ts`) |
 | `GitInfo.kt` | git CLI with the upstream's hardening (no fsmonitor, filters, hooks, lazy fetch); skipped in untrusted projects |
 | `ViewState.kt` | JSON for `media/panel.js` (same shape as the VS Code extension's `viewState.ts`) |
 | `HerdrService.kt` | per-project sync loop, connection states, switching, mounting, notifications |

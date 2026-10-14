@@ -260,6 +260,61 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         }
     }
 
+    // ---------- usage ----------
+
+    fun setKiroCredits() {
+        val s = HerdrSettings.get()
+        val v = input("Kiro Monthly Credits", "Your plan's monthly credit allowance (Kiro shows it in /usage). 0 hides the bar.", s.kiroMonthlyCredits.toString()) {
+            if ((it.trim().toIntOrNull() ?: -1) >= 0) null else "Enter a whole number"
+        } ?: return
+        s.kiroMonthlyCredits = v.toInt()
+        service.pollUsageNow()
+    }
+
+    /**
+     * Claude Code shares its 5-hour and weekly limits only with a status line command: after asking, installs the
+     * tiny one from claudeStatusLineScript() in ~/.claude/settings.json. Never replaces an existing status line.
+     */
+    fun setUpClaudeUsage() {
+        val home = System.getProperty("user.home")
+        val settingsFile = File(home, ".claude/settings.json")
+        val capture = claudeCaptureFile(home)
+        val settings = try {
+            if (settingsFile.exists()) com.google.gson.JsonParser.parseString(settingsFile.readText()).asJsonObject else com.google.gson.JsonObject()
+        } catch (e: Exception) {
+            Messages.showErrorDialog(project, "Couldn't read $settingsFile: ${e.message}", "Herdr")
+            return
+        }
+        if (settings.has("statusLine")) {
+            val snippet = "tee \"$capture\" | "
+            if (Messages.showOkCancelDialog(project,
+                    "To show plan limits in the sidebar, make your status line command also save its input: put $snippet in front of the command in ~/.claude/settings.json (\"statusLine\" → \"command\").",
+                    "You already have a Claude Code status line, so Herdr left it alone", "Copy Snippet", "Close", Messages.getInformationIcon()) == Messages.OK)
+                com.intellij.openapi.ide.CopyPasteManager.getInstance().setContents(java.awt.datatransfer.StringSelection(snippet))
+            return
+        }
+        if (Messages.showOkCancelDialog(project,
+                "Claude Code shares your 5-hour and weekly usage only with a status line command. Herdr will add a small one to " +
+                    "~/.claude/settings.json (a backup is saved next to it) that shows \"5h 42% · 7d 18%\" under the Claude prompt and saves " +
+                    "the numbers to $capture. With a custom status line, Claude Code hides some footer hints such as \"? for shortcuts\".\n\n" +
+                    "Limits appear for claude.ai Pro and Max plans, after the next reply in each session. To undo, remove \"statusLine\" from the settings file.",
+                "Show Claude plan limits in the Herdr sidebar?", "Set Up", "Cancel", Messages.getQuestionIcon()) != Messages.OK) return
+        try {
+            val script = File(capture.parentFile, "claude-statusline.sh")
+            capture.parentFile.mkdirs()
+            script.writeText(claudeStatusLineScript(capture))
+            script.setExecutable(true)
+            if (settingsFile.exists()) settingsFile.copyTo(File("$settingsFile.herdr-backup"), overwrite = true) else settingsFile.parentFile.mkdirs()
+            settings.add("statusLine", com.google.gson.JsonObject().apply { addProperty("type", "command"); addProperty("command", "sh \"$script\"") })
+            settingsFile.writeText(com.google.gson.GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(settings) + "\n")
+            service.log("claude usage: status line installed ($script); backup at $settingsFile.herdr-backup")
+            service.notify("Done. Claude plan limits appear after the next Claude reply.", NotificationType.INFORMATION)
+            service.pollUsageNow()
+        } catch (e: Exception) {
+            Messages.showErrorDialog(project, "Couldn't set up the status line: ${e.message}", "Herdr")
+        }
+    }
+
     private fun later(f: () -> Unit) = ApplicationManager.getApplication().invokeLater(f, project.disposed)
 
     private fun createSpace(label: String, what: What, create: () -> Created) = run("Creating space \"$label\"") { indicator ->

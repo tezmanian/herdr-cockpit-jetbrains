@@ -65,6 +65,8 @@ data class ViewInputs(
     val attached: (String) -> Boolean,
     val activity: (String) -> PaneActivity?,
     val connection: JsonObject,
+    /** Plan usage (Usage.kt); only the agents running in Herdr right now are shown. */
+    val usage: JsonArray = JsonArray(),
 )
 
 private fun strings(xs: List<String>) = JsonArray().apply { xs.forEach { add(it) } }
@@ -185,6 +187,7 @@ fun buildViewState(i: ViewInputs): JsonObject {
         add("totals", counts(totals).apply { addProperty("agents", agentCount); addProperty("shells", shellCount) })
         add("attention", JsonArray().apply { attention.forEach { add(it) } })
         add("spaces", spaces)
-        add("usage", JsonArray()) // plan usage is not ported yet
+        val running = i.model?.spaces?.flatMap { sp -> sp.agents.mapNotNull { it.agentKind?.lowercase() } }.orEmpty().toSet()
+        add("usage", JsonArray().apply { i.usage.filter { it.asJsonObject.get("id").asString in running }.forEach { add(it) } })
     }
 }

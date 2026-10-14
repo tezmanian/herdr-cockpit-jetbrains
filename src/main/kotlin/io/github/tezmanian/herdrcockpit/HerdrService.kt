@@ -4,6 +4,7 @@
 // All Herdr I/O runs on one background thread (`loop`), UI work on the EDT.
 package io.github.tezmanian.herdrcockpit
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.projectView.ProjectView
@@ -61,6 +62,7 @@ class HerdrService(private val project: Project) : Disposable {
     private val settings get() = HerdrSettings.get()
     private val loop = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-loop").apply { isDaemon = true } }
     private val activityExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-activity-loop").apply { isDaemon = true } }
+    private val usageExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-usage-loop").apply { isDaemon = true } }
     private val client = HerdrClient { socketPath() }
     val actions = HerdrActions(client)
     private val manage = HerdrManage(project, this)
@@ -94,11 +96,15 @@ class HerdrService(private val project: Project) : Disposable {
     @Volatile private var panelVisible = false
     private val listeners = mutableListOf<(String) -> Unit>()
     @Volatile private var lastState: String? = null
+    @Volatile private var usage = JsonArray()
+    private var codexLive: JsonObject? = null
+    private var codexLiveAt = 0L
 
     init {
         loop.scheduleWithFixedDelay({ guard { tick() } }, 0, 1500, TimeUnit.MILLISECONDS)
         activityExec.scheduleWithFixedDelay({ guard { pollActivity() } }, 2, 4, TimeUnit.SECONDS)
         loop.scheduleWithFixedDelay({ guard { if (model != null) render() } }, 15, 15, TimeUnit.SECONDS)
+        usageExec.scheduleWithFixedDelay({ guard { pollUsage() } }, 60, 60, TimeUnit.SECONDS)
         ApplicationManager.getApplication().messageBus.connect(this).subscribe(ProjectManager.TOPIC, object : ProjectManagerListener {
             override fun projectClosing(p: Project) { if (p == project) closing = true }
         })
@@ -149,7 +155,10 @@ class HerdrService(private val project: Project) : Disposable {
         return null
     }
 
-    fun settingsChanged() = loop.execute { guard { refresh(); render() } }
+    fun settingsChanged() {
+        loop.execute { guard { refresh(); render() } }
+        pollUsageNow()
+    }
 
     // ---------- sync loop ----------
     private fun tick() {
@@ -281,6 +290,7 @@ class HerdrService(private val project: Project) : Disposable {
         render()
         val shape = { m: Model? -> m?.spaces?.flatMap { s -> s.agents.map { "${it.id}=${it.status}" } + s.panes.map { it.id } }?.joinToString() }
         if (shape(prev) != shape(next)) activityExec.execute { guard { pollActivity() } }
+        if (runningKinds(prev) != runningKinds(next)) pollUsageNow()
     }
 
     private fun notifyTransition(space: Space, agent: Pane) {
@@ -306,6 +316,29 @@ class HerdrService(private val project: Project) : Disposable {
         if (activity.poll(targets)) scheduleRender()
     }
 
+    private fun runningKinds(m: Model?) = m?.spaces?.flatMap { sp -> sp.agents.mapNotNull { it.agentKind?.lowercase() } }.orEmpty().toSet()
+
+    /** Agents' plan usage from their local files: once a minute, only while the sidebar is visible, only for running agents. */
+    private fun pollUsage() {
+        val m = model ?: return
+        if (!panelVisible) return
+        val only = runningKinds(m)
+        val home = System.getProperty("user.home")
+        // Live Codex limits start a short-lived `codex app-server`: at most every 5 minutes.
+        if ("codex" in only && System.currentTimeMillis() - codexLiveAt > 5 * 60_000) {
+            codexLiveAt = System.currentTimeMillis()
+            codexLive = codexLiveUsage(codexBinary(home))
+            if (codexLive == null) log("usage: live Codex limits unavailable; using its session logs")
+        }
+        val next = readUsage(home, System.currentTimeMillis(), only, codexLive, settings.kiroMonthlyCredits)
+        if (next != usage) {
+            usage = next
+            scheduleRender()
+        }
+    }
+
+    fun pollUsageNow() = usageExec.execute { guard { pollUsage() } }
+
     // ---------- sidebar ----------
     fun addStateListener(parent: Disposable, l: (String) -> Unit) {
         synchronized(listeners) { listeners += l }
@@ -317,7 +350,10 @@ class HerdrService(private val project: Project) : Disposable {
     fun setPanelVisible(v: Boolean) {
         val was = panelVisible
         panelVisible = v
-        if (v && !was) activityExec.execute { guard { pollActivity() } }
+        if (v && !was) {
+            activityExec.execute { guard { pollActivity() } }
+            pollUsageNow()
+        }
     }
 
     fun scheduleRender() {
@@ -356,6 +392,7 @@ class HerdrService(private val project: Project) : Disposable {
                 attached = { files[it]?.connector != null },
                 activity = activity::get,
                 connection = connectionJson(),
+                usage = usage,
             ),
         ).toString()
         if (state == lastState) return
@@ -468,6 +505,8 @@ class HerdrService(private val project: Project) : Disposable {
             "newTab" -> m?.space(spaceId)?.let { manage.newTab(it) }
             "review" -> m?.space(spaceId)?.let { manage.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "menu" -> m?.space(spaceId)?.let { manage.menu(it, it.panes.firstOrNull { p -> p.id == paneId }) }
+            "setupClaudeUsage" -> manage.setUpClaudeUsage()
+            "setKiroCredits" -> manage.setKiroCredits()
             "openTui" -> notify("Run <code>herdr</code> in a terminal to open the Herdr TUI.", NotificationType.INFORMATION)
             else -> notify("\"$command\" isn't available in the JetBrains port yet.", NotificationType.INFORMATION)
         }
@@ -535,6 +574,7 @@ class HerdrService(private val project: Project) : Disposable {
         sub?.dispose()
         loop.shutdownNow()
         activityExec.shutdownNow()
+        usageExec.shutdownNow()
         activity.shutdown()
         git.shutdown()
         for (f in files.values) f.connector?.close()

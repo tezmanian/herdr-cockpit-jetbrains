@@ -11,6 +11,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.ui.dsl.builder.bindIntText
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
@@ -40,6 +41,8 @@ class HerdrSettingsState : BaseState() {
     var agents by string("claude, codex, kiro, cursor")
     /** Closing a pane's editor tab yourself: "never" only detaches, "ask" closes idle shells in Herdr and asks for the rest, "always" closes it. */
     var closeTabInHerdr by string("never")
+    /** Kiro's monthly credit allowance (Kiro doesn't store it locally); 0 = unknown, no bar. */
+    var kiroMonthlyCredits by property(0)
 }
 
 @Service(Service.Level.APP)
@@ -75,6 +78,12 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row { checkBox("Show shell panes").bindSelected(s::showShells) }
                 row { checkBox("Notify when an agent is blocked").bindSelected(s::notifyBlocked) }
                 row { checkBox("Notify when an agent is done").bindSelected(s::notifyDone) }
+            }
+            group("Usage") {
+                row("Kiro monthly credits:") {
+                    intTextField(0..10_000_000).bindIntText(s::kiroMonthlyCredits)
+                        .comment("Your plan's allowance (Kiro shows it in /usage). 0 hides the bar.")
+                }
             }
             group("Closing tabs") {
                 row("Closing a pane's tab yourself:") {
