@@ -1,6 +1,6 @@
 # Gitea Actions build (Gitea runs .gitea/workflows and then ignores .github/workflows; GitHub does the opposite).
-# Same steps as .github/workflows/build.yml, in the jdk21-runner image from Development/CI-Runner
-# (Temurin 21 + Node 24), so no JDK download per run. Needs the REGISTRY_USER / REGISTRY_PASSWORD secrets.
+# Same steps as .github/workflows/build.yml, on the runner label jdk21-runner (the jdk21-runner image from
+# Development/CI-Runner: Temurin 21 + Node 24), so no JDK download per run.
 name: Build
 
 on:
@@ -12,12 +12,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container:
-      image: gitea.root-zone.info/development/jdk21-runner:latest
-      credentials:
-        username: ${{ secrets.REGISTRY_USER }}
-        password: ${{ secrets.REGISTRY_PASSWORD }}
+    runs-on: jdk21-runner
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
@@ -38,12 +33,7 @@ jobs:
   verify:
     # JetBrains Plugin Verifier against PhpStorm 2025.3.6.1 and 2026.2.3 (each IDE ~1 GB, kept in the cache).
     needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: gitea.root-zone.info/development/jdk21-runner:latest
-      credentials:
-        username: ${{ secrets.REGISTRY_USER }}
-        password: ${{ secrets.REGISTRY_PASSWORD }}
+    runs-on: jdk21-runner
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
