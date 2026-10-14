@@ -2,9 +2,19 @@
 // Every new pane opens straight away in an editor tab; an agent is then started in it, in the background.
 package io.github.tezmanian.herdrcockpit
 
+import com.intellij.diff.DiffContentFactory
+import com.intellij.diff.DiffDialogHints
+import com.intellij.diff.DiffManager
+import com.intellij.diff.chains.DiffRequestProducer
+import com.intellij.diff.chains.SimpleDiffRequestChain
+import com.intellij.diff.contents.DiffContent
+import com.intellij.diff.requests.DiffRequest
+import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.icons.AllIcons
+import com.intellij.ide.trustedProjects.TrustedProjects
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.progress.ProgressIndicator
@@ -16,6 +26,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
+import com.intellij.openapi.util.UserDataHolder
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.awt.RelativePoint
 import java.awt.MouseInfo
@@ -115,6 +126,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         val items = buildList {
             if (pane != null) add(Item("Open", AllIcons.Actions.MenuOpen) { service.attachPane(space, pane) })
             else add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
+            if (pane == null || pane.isAgent) add(Item("Review Changes", AllIcons.Actions.Diff) { review(space, pane) })
             add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
             add(Item("Close in Herdr…", AllIcons.Actions.Close, "Herdr") { closeInHerdr(space, pane) })
         }
@@ -217,6 +229,35 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
             "Keep Running leaves it in Herdr; click it in the sidebar to open it again.",
         ).joinToString(" ")
         later { if (Messages.showOkCancelDialog(project, detail, "Close $name in Herdr too?", "Close in Herdr", "Keep Running", Messages.getWarningIcon()) == Messages.OK) close() }
+    }
+
+    /** "Review": every uncommitted change in the repo of the pane (or space) folder, as HEAD ↔ working tree diffs. */
+    fun review(space: Space, pane: Pane?) {
+        val cwd = pane?.cwd ?: space.cwd ?: return service.notify("No folder known for ${space.label}.", NotificationType.WARNING)
+        // Git runs programs from the repo's config in some setups; GitInfo hardens that, but untrusted projects skip git entirely.
+        if (!TrustedProjects.isProjectTrusted(project)) return service.notify("Review needs a trusted project (git isn't run in untrusted ones).", NotificationType.WARNING)
+        run("Review ${pane?.let { paneName(space.tabs.firstOrNull { t -> t.id == it.tabId }, it) } ?: space.label}") {
+            val root = gitRoot(cwd) ?: return@run service.notify("$cwd is not inside a git repository.", NotificationType.INFORMATION)
+            val changes = gitChanges(root) ?: throw IllegalStateException("git status failed in $root")
+            if (changes.isEmpty()) return@run service.notify("No uncommitted changes in ${File(root).name}.", NotificationType.INFORMATION)
+            val chain = SimpleDiffRequestChain.fromProducers(changes.map { diffOf(root, it) })
+            later { DiffManager.getInstance().showDiff(project, chain, DiffDialogHints.DEFAULT) }
+        }
+    }
+
+    /** One file's diff, built when the diff viewer gets to it (off the EDT). */
+    private fun diffOf(root: String, c: GitChange) = object : DiffRequestProducer {
+        override fun getName() = c.path
+        override fun process(context: UserDataHolder, indicator: ProgressIndicator): DiffRequest {
+            val factory = DiffContentFactory.getInstance()
+            val type = FileTypeManager.getInstance().getFileTypeByFileName(File(c.path).name)
+            val head = if (c.status == "??") null else gitShowHead(root, c.from ?: c.path)
+            val file = LocalFileSystem.getInstance().refreshAndFindFileByPath("$root/${c.path}")
+            val left = head?.let { factory.create(project, it, type) } ?: factory.createEmpty()
+            val right = file?.let { ApplicationManager.getApplication().runReadAction<DiffContent> { factory.create(project, it) } } ?: factory.createEmpty()
+            val what = c.from?.let { "renamed from $it" } ?: if (c.status == "??") "new" else c.status.trim()
+            return SimpleDiffRequest("${c.path} ($what)", left, right, if (head == null) "Not in HEAD" else "HEAD", if (file == null) "Deleted" else "Working tree")
+        }
     }
 
     private fun later(f: () -> Unit) = ApplicationManager.getApplication().invokeLater(f, project.disposed)

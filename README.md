@@ -28,6 +28,9 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 - **Right-click a space or pane** in the sidebar: open, new tab, rename (space; shell label; agent name), close in
   Herdr after confirming (a pane, its tab when it's the only pane, a space, or a worktree space with its folder;
   forcing is offered when Herdr refuses because of uncommitted changes).
+- **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
+  HEAD ↔ working tree diffs in one diff view (step through the files with the arrows). Uses the git CLI, so it also
+  works for spaces that aren't mounted; only in trusted projects.
 - Optional: closing a pane's editor tab yourself also closes it in Herdr (setting "Closing a pane's tab yourself":
   never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
 - Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, switching behaviour, notifications, agents offered
@@ -35,7 +38,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 
 ## Not ported yet
 
-Review changes (diff view), plan usage (Claude/Codex/Kiro), the
+Plan usage (Claude/Codex/Kiro), the
 Herdr plugin for jumping from Herdr to the IDE (deep links), Open Herdr TUI.
 These buttons exist in the sidebar but show "not available in the JetBrains port yet".
 

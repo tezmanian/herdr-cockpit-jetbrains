@@ -466,6 +466,7 @@ class HerdrService(private val project: Project) : Disposable {
             "copyDiagnostics" -> copyDiagnostics()
             "newSpace" -> manage.newSpace()
             "newTab" -> m?.space(spaceId)?.let { manage.newTab(it) }
+            "review" -> m?.space(spaceId)?.let { manage.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "menu" -> m?.space(spaceId)?.let { manage.menu(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "openTui" -> notify("Run <code>herdr</code> in a terminal to open the Herdr TUI.", NotificationType.INFORMATION)
             else -> notify("\"$command\" isn't available in the JetBrains port yet.", NotificationType.INFORMATION)

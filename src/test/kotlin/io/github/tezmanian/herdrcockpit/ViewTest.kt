@@ -108,4 +108,10 @@ class ViewTest {
         assertEquals("detached HEAD", parseStatus("## HEAD (no branch)\n").branch)
         assertEquals("main", parseStatus("## No commits yet on main\n").branch)
     }
+
+    @Test
+    fun parsesChangesForReview() {
+        val c = parseChanges(" M a b.txt\u0000R  new.txt\u0000old.txt\u0000?? dir/c.txt\u0000")
+        assertEquals(listOf(GitChange("a b.txt", " M"), GitChange("new.txt", "R ", "old.txt"), GitChange("dir/c.txt", "??")), c)
+    }
 }

@@ -148,3 +148,26 @@ class GitCache(private val onUpdate: () -> Unit) {
 
     fun shutdown() = pool.shutdownNow()
 }
+
+/** An uncommitted change: `path` relative to the repo root, porcelain XY status, `from` the old path of a rename. */
+data class GitChange(val path: String, val status: String, val from: String? = null)
+
+/** Parses `git status --porcelain=v1 -z`: "XY path\0", renames and copies "XY new\0old\0". */
+fun parseChanges(out: String): List<GitChange> {
+    val tokens = out.split('\u0000').filter { it.isNotEmpty() }
+    val changes = mutableListOf<GitChange>()
+    var i = 0
+    while (i < tokens.size) {
+        val t = tokens[i++]
+        if (t.length < 4) continue
+        val xy = t.substring(0, 2)
+        val from = if ('R' in xy || 'C' in xy) tokens.getOrNull(i++) else null
+        changes += GitChange(t.substring(3), xy, from)
+    }
+    return changes
+}
+
+fun gitRoot(cwd: String): String? = run(cwd, listOf("rev-parse", "--show-toplevel"))?.trim()?.ifEmpty { null }
+fun gitChanges(root: String): List<GitChange>? = run(root, listOf("status", "--porcelain=v1", "-z", "--untracked-files=all"))?.let(::parseChanges)
+/** The file at HEAD (shortcut: decoded as UTF-8 text, so binary files diff as garbage); null if it isn't in HEAD. */
+fun gitShowHead(root: String, path: String): String? = run(root, listOf("show", "HEAD:$path"))
