@@ -1,0 +1,81 @@
+// Application-wide settings (Settings | Tools | Herdr Cockpit). Machine-level on purpose: a project can't
+// pick the program we launch or the socket we talk to.
+package io.github.tezmanian.herdrcockpit
+
+import com.intellij.openapi.components.BaseState
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.SimplePersistentStateComponent
+import com.intellij.openapi.components.State
+import com.intellij.openapi.components.Storage
+import com.intellij.openapi.components.service
+import com.intellij.openapi.options.BoundConfigurable
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.ui.DialogPanel
+import com.intellij.ui.dsl.builder.bindSelected
+import com.intellij.ui.dsl.builder.bindText
+import com.intellij.ui.dsl.builder.columns
+import com.intellij.ui.dsl.builder.COLUMNS_LARGE
+import com.intellij.ui.dsl.builder.panel
+
+class HerdrSettingsState : BaseState() {
+    /** Path to the herdr binary; empty = look in the usual install folders, then PATH. */
+    var binaryPath by string("")
+    /** Herdr socket; empty = HERDR_SOCKET_PATH, HERDR_SESSION or ~/.config/herdr/herdr.sock. */
+    var socketPath by string("")
+    /** When Herdr's focused space changes, switch here too (only in projects you switched from the IDE). */
+    var followMode by property(true)
+    /** Switching a space opens a tab for every pane. */
+    var autoAttachOnSwitch by property(true)
+    /** ...including shell panes, not only agents. */
+    var autoAttachShells by property(true)
+    /** Switching a space closes (detaches) the tabs of other spaces. */
+    var closeTerminalsOnSwitch by property(true)
+    /** Switching a space adds its folder as a content root of this project. */
+    var mountOnSwitch by property(true)
+    var showShells by property(true)
+    var notifyBlocked by property(true)
+    var notifyDone by property(true)
+}
+
+@Service(Service.Level.APP)
+@State(name = "HerdrCockpitSettings", storages = [Storage("herdr-cockpit.xml")])
+class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSettingsState()) {
+    companion object {
+        fun get(): HerdrSettingsState = service<HerdrSettings>().state
+    }
+}
+
+class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
+    override fun createPanel(): DialogPanel {
+        val s = HerdrSettings.get()
+        return panel {
+            group("Connection") {
+                row("herdr binary:") {
+                    textField().bindText({ s.binaryPath ?: "" }, { s.binaryPath = it }).columns(COLUMNS_LARGE)
+                        .comment("Empty: ~/.local/bin, Homebrew, /usr/bin and the other usual folders, then PATH.")
+                }
+                row("Socket:") {
+                    textField().bindText({ s.socketPath ?: "" }, { s.socketPath = it }).columns(COLUMNS_LARGE)
+                        .comment("Empty: HERDR_SOCKET_PATH, HERDR_SESSION, else ~/.config/herdr/herdr.sock. A …/sessions/&lt;name&gt;/herdr.sock path selects that session.")
+                }
+            }
+            group("Switching spaces") {
+                row { checkBox("Add the space's folder as a content root").bindSelected(s::mountOnSwitch) }
+                row { checkBox("Open a tab for every pane").bindSelected(s::autoAttachOnSwitch) }
+                row { checkBox("Include shell panes").bindSelected(s::autoAttachShells) }
+                row { checkBox("Close the tabs of other spaces (they only detach)").bindSelected(s::closeTerminalsOnSwitch) }
+                row { checkBox("Follow Herdr's focus (in projects you switched from the IDE)").bindSelected(s::followMode) }
+            }
+            group("Sidebar and notifications") {
+                row { checkBox("Show shell panes").bindSelected(s::showShells) }
+                row { checkBox("Notify when an agent is blocked").bindSelected(s::notifyBlocked) }
+                row { checkBox("Notify when an agent is done").bindSelected(s::notifyDone) }
+            }
+        }
+    }
+
+    override fun apply() {
+        super.apply()
+        for (p in ProjectManager.getInstance().openProjects) HerdrService.getInstance(p).settingsChanged()
+    }
+}

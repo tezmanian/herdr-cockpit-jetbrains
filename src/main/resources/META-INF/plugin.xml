@@ -1,0 +1,32 @@
+<idea-plugin>
+    <id>io.github.tezmanian.herdrcockpit</id>
+    <name>Herdr Cockpit</name>
+    <vendor>tezmanian</vendor>
+    <description><![CDATA[
+    Community (unofficial) client for <a href="https://herdr.dev">Herdr</a>, the terminal multiplexer for coding agents:
+    its spaces, agents and shells in the IDE. Switch a space and its folder and every agent and shell (as editor tabs)
+    are right there. A JetBrains port of
+    <a href="https://github.com/sriharirao92/vscode-herdr-cockpit">Herdr Cockpit for VS Code</a>.
+    ]]></description>
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Herdr" anchor="right" icon="/icons/herdr.svg"
+                    factoryClass="io.github.tezmanian.herdrcockpit.HerdrToolWindowFactory"/>
+        <fileEditorProvider implementation="io.github.tezmanian.herdrcockpit.HerdrPaneEditorProvider"/>
+        <editorTabTitleProvider implementation="io.github.tezmanian.herdrcockpit.HerdrPaneTabTitleProvider"/>
+        <fileIconProvider implementation="io.github.tezmanian.herdrcockpit.HerdrPaneIconProvider"/>
+        <applicationConfigurable parentId="tools" instance="io.github.tezmanian.herdrcockpit.HerdrConfigurable"
+                                 id="herdr.cockpit" displayName="Herdr Cockpit"/>
+        <notificationGroup id="Herdr Cockpit" displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <group id="HerdrCockpit.Actions" text="Herdr" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="HerdrCockpit.SwitchSpace" class="io.github.tezmanian.herdrcockpit.SwitchSpaceAction"/>
+            <action id="HerdrCockpit.FocusAttention" class="io.github.tezmanian.herdrcockpit.FocusAttentionAction"/>
+            <action id="HerdrCockpit.Refresh" class="io.github.tezmanian.herdrcockpit.RefreshAction"/>
+        </group>
+    </actions>
+</idea-plugin>
