@@ -27,6 +27,7 @@ import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.project.ProjectManagerListener
+import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -139,6 +140,10 @@ class HerdrService(private val project: Project) : Disposable {
 
     fun currentModel(): Model? = model
     fun isConnected(): Boolean = conn is Conn.Connected
+
+    /** How many agents are blocked and done right now. */
+    fun attention(): Pair<Int, Int> = model?.spaces?.flatMap { it.agents }.orEmpty()
+        .let { a -> a.count { it.status == AgentStatus.blocked } to a.count { it.status == AgentStatus.done } }
 
     /** The current git branch of a space's folder (cached; none in untrusted projects). */
     fun branchOf(cwd: String?): String? = if (TrustedProjects.isProjectTrusted(project)) git.get(cwd)?.branch else null
@@ -436,6 +441,25 @@ class HerdrService(private val project: Project) : Disposable {
         return true
     }
 
+    fun isOurMount(space: Space): Boolean = ourRoot(space) != null
+
+    private fun ourRoot(space: Space) = space.cwd?.let { cwd ->
+        val ours = mountedRoots()
+        ModuleManager.getInstance(project).modules.firstNotNullOfOrNull { m ->
+            ModuleRootManager.getInstance(m).contentEntries.firstOrNull { it.url in ours && it.file?.path == cwd }?.let { m to it.url }
+        }
+    }
+
+    /** Removes the space's folder again, only if the plugin added it. */
+    fun unmount(space: Space) {
+        val (module, url) = ourRoot(space) ?: return
+        ModuleRootModificationUtil.updateModel(module) { m -> m.contentEntries.filter { it.url == url }.forEach(m::removeContentEntry) }
+        props().setList(MOUNTED_KEY, mountedRoots() - url)
+        scheduleRender()
+    }
+
+    fun activityOf(paneId: String) = activity.get(paneId)
+
     // ---------- actions ----------
     fun switchTo(space: Space, fromHerdr: Boolean = false, autoAttach: Boolean = settings.autoAttachOnSwitch) {
         switching = true
@@ -507,9 +531,29 @@ class HerdrService(private val project: Project) : Disposable {
             "menu" -> m?.space(spaceId)?.let { manage.menu(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "setupClaudeUsage" -> manage.setUpClaudeUsage()
             "setKiroCredits" -> manage.setKiroCredits()
-            "openTui" -> notify("Run <code>herdr</code> in a terminal to open the Herdr TUI.", NotificationType.INFORMATION)
+            "openTui" -> openTui()
+            "openHelp" -> openHelp()
             else -> notify("\"$command\" isn't available in the JetBrains port yet.", NotificationType.INFORMATION)
         }
+    }
+
+    private var tui: HerdrTuiFile? = null
+    private var help: HerdrHelpFile? = null
+
+    fun openHelp() {
+        val fem = FileEditorManager.getInstance(project)
+        fem.openFile(help?.takeIf { fem.isFileOpen(it) } ?: HerdrHelpFile().also { help = it }, true)
+    }
+
+    /** The Herdr TUI in an editor tab; it may start the server, so re-check the connection shortly after. */
+    fun openTui() {
+        val fem = FileEditorManager.getInstance(project)
+        val f = tui?.takeIf { fem.isFileOpen(it) } ?: HerdrTuiFile().also { tui = it }
+        if (!binaryFound(binary())) return notify("Herdr isn't installed (${binary()}).", NotificationType.WARNING)
+        fem.openFile(f, true)
+        nextAttempt = 0
+        lastDiagnosis = 0
+        loop.schedule({ guard { refresh() } }, 1500, TimeUnit.MILLISECONDS)
     }
 
     fun startHerdr() {

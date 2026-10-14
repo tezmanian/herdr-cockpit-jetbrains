@@ -1,0 +1,29 @@
+# Herdr Cockpit for JetBrains: jump from Herdr to PhpStorm (or another JetBrains IDE) running the Herdr Cockpit plugin.
+#
+#   herdr plugin install tezmanian/herdr-cockpit/herdr-plugin
+#
+# One POSIX shell script (herdr-cockpit-jetbrains.sh); needs curl (or wget).
+id = "tezmanian.herdr-cockpit-jetbrains"
+name = "Herdr Cockpit for JetBrains"
+version = "0.1.0"
+min_herdr_version = "0.9.1"
+platforms = ["macos", "linux"]
+description = "Opens the space or pane you're on, its changes, or a selected file:line path in the JetBrains IDE running the Herdr Cockpit plugin."
+
+[[actions]]
+id = "open"
+title = "Herdr Cockpit: Open in JetBrains IDE"
+contexts = ["global", "workspace", "tab", "pane"]
+command = ["sh", "herdr-cockpit-jetbrains.sh", "open"]
+
+[[actions]]
+id = "open-file"
+title = "Herdr Cockpit: Open selected file in JetBrains IDE"
+contexts = ["selection", "pane"]
+command = ["sh", "herdr-cockpit-jetbrains.sh", "open-file"]
+
+[[actions]]
+id = "review"
+title = "Herdr Cockpit: Review changes in JetBrains IDE"
+contexts = ["workspace", "pane"]
+command = ["sh", "herdr-cockpit-jetbrains.sh", "review"]

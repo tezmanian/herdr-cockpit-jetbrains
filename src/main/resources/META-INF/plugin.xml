@@ -18,6 +18,9 @@
         <fileIconProvider implementation="io.github.tezmanian.herdrcockpit.HerdrPaneIconProvider"/>
         <applicationConfigurable parentId="tools" instance="io.github.tezmanian.herdrcockpit.HerdrConfigurable"
                                  id="herdr.cockpit" displayName="Herdr Cockpit"/>
+        <statusBarWidgetFactory id="HerdrCockpit.Status" implementation="io.github.tezmanian.herdrcockpit.HerdrStatusBarFactory"/>
+        <httpRequestHandler implementation="io.github.tezmanian.herdrcockpit.HerdrLinkService"/>
+        <postStartupActivity implementation="io.github.tezmanian.herdrcockpit.HerdrLinkStartup"/>
         <notificationGroup id="Herdr Cockpit" displayType="BALLOON"/>
     </extensions>
 
@@ -27,6 +30,7 @@
             <action id="HerdrCockpit.SwitchSpace" class="io.github.tezmanian.herdrcockpit.SwitchSpaceAction"/>
             <action id="HerdrCockpit.FocusAttention" class="io.github.tezmanian.herdrcockpit.FocusAttentionAction"/>
             <action id="HerdrCockpit.Refresh" class="io.github.tezmanian.herdrcockpit.RefreshAction"/>
+            <action id="HerdrCockpit.OpenTui" class="io.github.tezmanian.herdrcockpit.OpenTuiAction"/>
         </group>
     </actions>
 </idea-plugin>

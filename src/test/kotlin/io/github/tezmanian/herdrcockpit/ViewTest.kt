@@ -114,4 +114,22 @@ class ViewTest {
         val c = parseChanges(" M a b.txt\u0000R  new.txt\u0000old.txt\u0000?? dir/c.txt\u0000")
         assertEquals(listOf(GitChange("a b.txt", " M"), GitChange("new.txt", "R ", "old.txt"), GitChange("dir/c.txt", "??")), c)
     }
+
+    @Test
+    fun rawRecordsOfSpaceAndPane() {
+        val m = fixture()
+        val a = m.space("w2")!!.agents.first()
+        assertEquals("w2", m.rawOf("w2", null)!!.get("workspace_id").asString)
+        val raw = m.rawOf("w2", a.id)!!
+        assertEquals(a.id, raw.getAsJsonObject("pane").get("pane_id").asString)
+        assertEquals(a.id, raw.getAsJsonObject("agent").get("pane_id").asString)
+    }
+
+    @Test
+    fun statusBarText() {
+        assertEquals("⬢ Herdr: disconnected", statusText(false, 3, 0))
+        assertEquals("⬢ Herdr", statusText(true, 0, 0))
+        assertEquals("⬢ 1 blocked · 2 done", statusText(true, 1, 2))
+        assertEquals("⬢ 2 done", statusText(true, 0, 2))
+    }
 }

@@ -125,12 +125,27 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         if (!connected()) return
         val items = buildList {
             if (pane != null) add(Item("Open", AllIcons.Actions.MenuOpen) { service.attachPane(space, pane) })
-            else add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
+            else {
+                add(Item("Switch to Space", AllIcons.Actions.Forward) { service.switchTo(space) })
+                if (service.isOurMount(space)) add(Item("Unmount Folder", AllIcons.Actions.Cancel) { service.unmount(space) })
+                add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
+            }
             if (pane == null || pane.isAgent) add(Item("Review Changes", AllIcons.Actions.Diff) { review(space, pane) })
             add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
             add(Item("Close in Herdr…", AllIcons.Actions.Close, "Herdr") { closeInHerdr(space, pane) })
+            add(Item("Show Raw", AllIcons.FileTypes.Json, "Debug") { showRaw(space, pane) })
         }
         choose(null, items, atMouse = true)
+    }
+
+    /** Herdr's snapshot records (and, for a pane, the polled activity) as a read-only JSON tab. */
+    private fun showRaw(space: Space, pane: Pane?) {
+        val raw = service.currentModel()?.rawOf(space.id, pane?.id) ?: return
+        if (pane != null) raw.add("activity", com.google.gson.Gson().toJsonTree(service.activityOf(pane.id)))
+        val json = com.google.gson.GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(raw)
+        val name = (pane?.let { paneName(space.tabs.firstOrNull { t -> t.id == it.tabId }, it) } ?: space.label) + ".json"
+        val file = com.intellij.testFramework.LightVirtualFile(name, FileTypeManager.getInstance().getFileTypeByExtension("json"), json).apply { isWritable = false }
+        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(file, true)
     }
 
     /** A space, or a pane (shells: the pane label; agents: the agent's name). */

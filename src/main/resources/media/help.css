@@ -1,0 +1,51 @@
+/* Document layout for the help page. Components (rows, pills, git line) come from panel.css. */
+body { background: var(--vscode-editor-background); }
+.doc { max-width: 760px; margin: 0 auto; padding: 24px 28px 64px; line-height: 1.55; }
+.doc-title { font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.doc-title .codicon { font-size: 22px; color: var(--vscode-textLink-foreground); }
+.lede { color: var(--muted); font-size: 13.5px; margin: 8px 0 14px; }
+.doc a { color: var(--vscode-textLink-foreground); }
+.doc a:hover { color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground)); }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 18px; border-bottom: 1px solid var(--card-border); }
+.toc a {
+  font-size: 12px; padding: 2px 9px; border-radius: 999px; text-decoration: none;
+  color: var(--vscode-textLink-foreground); background: color-mix(in srgb, var(--vscode-textLink-foreground) 10%, transparent);
+}
+.toc a:hover { background: color-mix(in srgb, var(--vscode-textLink-foreground) 20%, transparent); }
+section { scroll-margin-top: 12px; }
+h2 { font-size: 16px; margin: 30px 0 8px; padding-top: 4px; }
+p, li, dd { font-size: 13px; }
+ul { padding-left: 20px; }
+li { margin: 4px 0; }
+dl { margin: 10px 0; }
+dt { font-weight: 600; margin-top: 10px; font-size: 13px; }
+dd { margin: 2px 0 0 0; color: var(--fg); opacity: .9; }
+code, kbd { font-family: var(--mono); font-size: 12px; }
+code { padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--fg) 8%, transparent); }
+kbd { padding: 0 5px; border-radius: 4px; border: 1px solid var(--card-border); border-bottom-width: 2px; }
+.note { color: var(--muted); font-size: 12.5px; }
+li .codicon, p .codicon, dd .codicon, dt .codicon, td .codicon { vertical-align: -2px; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+td:first-child { white-space: nowrap; }
+td .state, td .space-meta.inline { display: inline-flex; }
+.space-meta.inline { padding: 0; gap: 6px; }
+/* demos: framed like the sidebar */
+.demo {
+  max-width: 380px; margin: 12px 0; padding: 6px 4px;
+  border: 1px dashed var(--card-border); border-radius: 8px;
+  background: var(--vscode-sideBar-background);
+}
+.demo.top { position: static; border-bottom: 1px dashed var(--card-border); padding: 8px 10px; }
+.demo .row, .demo .space-head, .demo .changes { cursor: default; }
+.demo .space { margin: 6px 4px; }
+.btn .codicon { vertical-align: -2px; margin-right: 4px; }
+.fill.w72 { width: 72%; } .fill.w18 { width: 18%; } .fill.w91 { width: 91%; }
+.demo.titlebar {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 10px;
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--muted);
+}
+.tb-icons { display: inline-flex; gap: 2px; }
+.settings td:first-child { white-space: normal; font-family: var(--mono); font-size: 12px; }
+.settings .def { color: var(--muted); font-family: var(--mono); font-size: 11.5px; }

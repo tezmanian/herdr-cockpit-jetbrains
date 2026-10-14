@@ -62,6 +62,14 @@ data class Model(val spaces: List<Space>, val focusedSpaceId: String?, val versi
         return null
     }
     fun space(id: String?): Space? = spaces.firstOrNull { it.id == id }
+
+    /** The snapshot records behind a pane (its pane and agent record) or, without a pane, a space. */
+    fun rawOf(spaceId: String?, paneId: String?): JsonObject? {
+        val s = raw.obj("snapshot") ?: return null
+        fun pick(arr: String, key: String, id: String?) = s.arr(arr)?.firstOrNull { it.s(key) == id }
+        if (paneId == null) return pick("workspaces", "workspace_id", spaceId)
+        return JsonObject().apply { add("pane", pick("panes", "pane_id", paneId)); add("agent", pick("agents", "pane_id", paneId)) }
+    }
 }
 
 fun rollup(ss: List<AgentStatus?>): AgentStatus? = ss.filterNotNull().maxByOrNull { it.priority }

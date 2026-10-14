@@ -56,6 +56,11 @@ socket server.
 setting says otherwise. `HerdrService` ignores tab closes the plugin itself causes, and tab closes during project
 close.
 
+**Links from Herdr** (HerdrLinks.kt): the POSIX-sh Herdr plugin in `herdr-plugin/` calls the IDE's built-in server
+(`/api/herdr-cockpit/<action>`) with the port and per-run token from `~/.herdr-cockpit/jetbrains.json`. `parseLink()` is
+the trust boundary: links may only select an existing space, pane or file of the IDE's own session. Running the sandbox
+IDE rewrites that file in your real home; delete it afterwards.
+
 **Git** (GitInfo.kt) shells out to the git CLI with the upstream's hardening (fsmonitor, filters and hooks off). It is
 skipped in untrusted projects.
 

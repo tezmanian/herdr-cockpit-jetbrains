@@ -39,8 +39,9 @@ class HerdrToolWindowFactory : ToolWindowFactory, DumbAware {
         val component = if (JBCefApp.isSupported()) HerdrPanel(project, toolWindow).component
         else JBLabel("Herdr Cockpit needs JCEF (the embedded browser), which this IDE runtime doesn't have.", SwingConstants.CENTER)
         toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(component, "", false))
-        toolWindow.setTitleActions(listOf(SwitchSpaceAction(), RefreshAction(), OpenSettingsAction()))
+        toolWindow.setTitleActions(listOf(SwitchSpaceAction(), RefreshAction(), OpenSettingsAction(), HelpAction()))
         service.setPanelVisible(toolWindow.isVisible)
+        badgeToolWindow(project, toolWindow)
         project.messageBus.connect(toolWindow.disposable).subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
             override fun stateChanged(manager: ToolWindowManager) {
                 service.setPanelVisible(manager.getToolWindow("Herdr")?.isVisible == true)
@@ -95,11 +96,7 @@ private class HerdrPanel(private val project: Project, toolWindow: ToolWindow) {
         browser.loadHTML(html())
     }
 
-    private fun res(path: String): String = javaClass.getResourceAsStream("/media/$path")!!.use { String(it.readBytes(), Charsets.UTF_8) }
-    private fun resBase64(path: String): String = javaClass.getResourceAsStream("/media/$path")!!.use { Base64.getEncoder().encodeToString(it.readBytes()) }
-
     private fun html(): String {
-        val codicons = res("codicons/codicon.css").replace(Regex("""url\("\./codicon\.ttf[^"]*"\)"""), "url(\"data:font/ttf;base64,${resBase64("codicons/codicon.ttf")}\")")
         val shim = """
             window.__herdrSend = function (msg) { ${query.inject("msg")} };
             window.__herdrUi = $uiState;
@@ -112,67 +109,76 @@ private class HerdrPanel(private val project: Project, toolWindow: ToolWindow) {
             };
             document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
         """.trimIndent()
-        // Inline scripts can't contain a literal "</script>"; the bundled files don't, but guard anyway.
-        fun script(js: String) = "<script>${js.replace("</script>", "<\\/script>")}</script>"
         return """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
-<style>${themeCss()}</style>
-<style>$codicons</style>
-<style>${res("panel.css")}</style>
+${mediaStyles()}
 <style>body { background: var(--vscode-sideBar-background); padding: 4px 8px; }</style>
 </head><body>
 <main id="app" aria-label="Herdr spaces and agents"></main>
 ${script(shim)}
-${script(res("agent-icons.js"))}
-${script(res("panel.js"))}
+${script(media("agent-icons.js"))}
+${script(media("panel.js"))}
 </body></html>"""
     }
+}
 
-    /** The VS Code theme variables media/panel.css reads, from the current IntelliJ theme. */
-    private fun themeCss(): String {
-        val dark = !JBColor.isBright()
-        fun ui(key: String, fallback: Color) = UIManager.getColor(key) ?: fallback
-        fun c(color: Color?) = color?.let { if (it.alpha == 255) "#%02x%02x%02x".format(it.red, it.green, it.blue) else "rgba(${it.red},${it.green},${it.blue},${it.alpha / 255.0})" } ?: "inherit"
-        val scheme = EditorColorsManager.getInstance().globalScheme
-        val font = UIUtil.getLabelFont()
-        val fg = UIUtil.getLabelForeground()
-        val accent = JBUI.CurrentTheme.Focus.focusColor()
-        val vars = mapOf(
-            "foreground" to c(fg),
-            "descriptionForeground" to c(UIUtil.getContextHelpForeground()),
-            "sideBar-background" to c(JBUI.CurrentTheme.ToolWindow.background()),
-            "focusBorder" to c(accent),
-            "textLink-foreground" to c(JBUI.CurrentTheme.Link.Foreground.ENABLED),
-            "list-hoverBackground" to c(JBUI.CurrentTheme.List.Hover.background(true)),
-            "toolbar-hoverBackground" to c(JBUI.CurrentTheme.ActionButton.hoverBackground()),
-            "button-background" to c(ui("Button.default.startBackground", accent)),
-            "button-hoverBackground" to c(ui("Button.default.endBackground", accent)),
-            "button-foreground" to c(ui("Button.default.foreground", Color.WHITE)),
-            "button-secondaryBackground" to c(ui("Button.startBackground", JBUI.CurrentTheme.ToolWindow.background())),
-            "button-secondaryHoverBackground" to c(ui("Button.endBackground", JBUI.CurrentTheme.ToolWindow.background())),
-            "button-secondaryForeground" to c(ui("Button.foreground", fg)),
-            "badge-background" to c(accent),
-            "badge-foreground" to "#ffffff",
-            "inputOption-activeBackground" to c(Color(accent.red, accent.green, accent.blue, 64)),
-            "inputOption-activeForeground" to c(fg),
-            "charts-blue" to if (dark) "#3794ff" else "#1a85ff",
-            "charts-green" to if (dark) "#89d185" else "#388a34",
-            "charts-orange" to if (dark) "#d18616" else "#c27d0e",
-            "charts-purple" to if (dark) "#b180d7" else "#8152a6",
-            "charts-red" to if (dark) "#f14c4c" else "#e51400",
-            "gitDecoration-addedResourceForeground" to c(FileStatus.ADDED.color),
-            "gitDecoration-modifiedResourceForeground" to c(FileStatus.MODIFIED.color),
-            "gitDecoration-untrackedResourceForeground" to c(FileStatus.UNKNOWN.color),
-            "gitDecoration-conflictingResourceForeground" to c(FileStatus.MERGED_WITH_CONFLICTS.color),
-            "editor-background" to c(scheme.defaultBackground),
-            "terminal-background" to c(scheme.defaultBackground),
-            "terminal-foreground" to c(scheme.defaultForeground),
-            "font-family" to "'${font.family}', system-ui, sans-serif",
-            "font-size" to "${font.size}px",
-            "editor-font-family" to "'${scheme.editorFontName}', ui-monospace, monospace",
-        )
-        return ":root { color-scheme: ${if (dark) "dark" else "light"}; ${vars.entries.joinToString(" ") { "--vscode-${it.key}: ${it.value};" }} }"
-    }
+/** A file from src/main/resources/media. */
+fun media(path: String): String = HerdrPanel::class.java.getResourceAsStream("/media/$path")!!.use { String(it.readBytes(), Charsets.UTF_8) }
+private fun mediaBase64(path: String): String = HerdrPanel::class.java.getResourceAsStream("/media/$path")!!.use { Base64.getEncoder().encodeToString(it.readBytes()) }
+
+// Inline scripts can't contain a literal "</script>"; the bundled files don't, but guard anyway.
+fun script(js: String) = "<script>${js.replace("</script>", "<\\/script>")}</script>"
+
+/** Theme variables, codicons and panel.css, as <style> blocks: what the sidebar and the help page share. */
+fun mediaStyles(): String {
+    val codicons = media("codicons/codicon.css").replace(Regex("""url\("\./codicon\.ttf[^"]*"\)"""), "url(\"data:font/ttf;base64,${mediaBase64("codicons/codicon.ttf")}\")")
+    return "<style>${themeCss()}</style>\n<style>$codicons</style>\n<style>${media("panel.css")}</style>"
+}
+
+/** The VS Code theme variables media/panel.css reads, from the current IntelliJ theme. */
+private fun themeCss(): String {
+    val dark = !JBColor.isBright()
+    fun ui(key: String, fallback: Color) = UIManager.getColor(key) ?: fallback
+    fun c(color: Color?) = color?.let { if (it.alpha == 255) "#%02x%02x%02x".format(it.red, it.green, it.blue) else "rgba(${it.red},${it.green},${it.blue},${it.alpha / 255.0})" } ?: "inherit"
+    val scheme = EditorColorsManager.getInstance().globalScheme
+    val font = UIUtil.getLabelFont()
+    val fg = UIUtil.getLabelForeground()
+    val accent = JBUI.CurrentTheme.Focus.focusColor()
+    val vars = mapOf(
+        "foreground" to c(fg),
+        "descriptionForeground" to c(UIUtil.getContextHelpForeground()),
+        "sideBar-background" to c(JBUI.CurrentTheme.ToolWindow.background()),
+        "focusBorder" to c(accent),
+        "textLink-foreground" to c(JBUI.CurrentTheme.Link.Foreground.ENABLED),
+        "list-hoverBackground" to c(JBUI.CurrentTheme.List.Hover.background(true)),
+        "toolbar-hoverBackground" to c(JBUI.CurrentTheme.ActionButton.hoverBackground()),
+        "button-background" to c(ui("Button.default.startBackground", accent)),
+        "button-hoverBackground" to c(ui("Button.default.endBackground", accent)),
+        "button-foreground" to c(ui("Button.default.foreground", Color.WHITE)),
+        "button-secondaryBackground" to c(ui("Button.startBackground", JBUI.CurrentTheme.ToolWindow.background())),
+        "button-secondaryHoverBackground" to c(ui("Button.endBackground", JBUI.CurrentTheme.ToolWindow.background())),
+        "button-secondaryForeground" to c(ui("Button.foreground", fg)),
+        "badge-background" to c(accent),
+        "badge-foreground" to "#ffffff",
+        "inputOption-activeBackground" to c(Color(accent.red, accent.green, accent.blue, 64)),
+        "inputOption-activeForeground" to c(fg),
+        "charts-blue" to if (dark) "#3794ff" else "#1a85ff",
+        "charts-green" to if (dark) "#89d185" else "#388a34",
+        "charts-orange" to if (dark) "#d18616" else "#c27d0e",
+        "charts-purple" to if (dark) "#b180d7" else "#8152a6",
+        "charts-red" to if (dark) "#f14c4c" else "#e51400",
+        "gitDecoration-addedResourceForeground" to c(FileStatus.ADDED.color),
+        "gitDecoration-modifiedResourceForeground" to c(FileStatus.MODIFIED.color),
+        "gitDecoration-untrackedResourceForeground" to c(FileStatus.UNKNOWN.color),
+        "gitDecoration-conflictingResourceForeground" to c(FileStatus.MERGED_WITH_CONFLICTS.color),
+        "editor-background" to c(scheme.defaultBackground),
+        "terminal-background" to c(scheme.defaultBackground),
+        "terminal-foreground" to c(scheme.defaultForeground),
+        "font-family" to "'${font.family}', system-ui, sans-serif",
+        "font-size" to "${font.size}px",
+        "editor-font-family" to "'${scheme.editorFontName}', ui-monospace, monospace",
+    )
+    return ":root { color-scheme: ${if (dark) "dark" else "light"}; ${vars.entries.joinToString(" ") { "--vscode-${it.key}: ${it.value};" }} }"
 }
 
 class RefreshAction : DumbAwareAction("Refresh", "Re-read Herdr's state", AllIcons.Actions.Refresh) {
@@ -190,7 +196,17 @@ class OpenSettingsAction : DumbAwareAction("Settings", "Herdr Cockpit settings",
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
 }
 
+class HelpAction : DumbAwareAction("Help", "How to read the Herdr sidebar", AllIcons.Actions.Help) {
+    override fun actionPerformed(e: AnActionEvent) { e.project?.let { HerdrService.getInstance(it).openHelp() } }
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+}
+
 class FocusAttentionAction : DumbAwareAction("Jump to Agent That Needs You", "Open the blocked or done agent", AllIcons.General.Warning) {
     override fun actionPerformed(e: AnActionEvent) { e.project?.let { HerdrService.getInstance(it).handle("attention", null, null) } }
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+}
+
+class OpenTuiAction : DumbAwareAction("Open Herdr TUI", "Run herdr in an editor tab", AllIcons.Nodes.Console) {
+    override fun actionPerformed(e: AnActionEvent) { e.project?.let { HerdrService.getInstance(it).openTui() } }
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
 }

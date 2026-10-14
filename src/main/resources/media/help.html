@@ -1,0 +1,422 @@
+<!-- Body of the "How to read the Herdr sidebar" page (HerdrHelp.kt wraps it). Adapted from the VS Code extension's
+     media/help.html (MIT). Examples use the sidebar's own classes from panel.css; [data-logo] avatars are filled in by
+     help.js. -->
+<header class="doc-head">
+  <div class="doc-title"><span class="codicon codicon-question"></span> How to read the Herdr sidebar</div>
+  <p class="lede">
+    The sidebar is a live view of your Herdr server: every space, the agents and shells in it, and what each one is
+    doing. Nothing runs inside the IDE. Agents and shells keep running in Herdr, and the editor tabs Herdr Cockpit opens
+    are live views of Herdr's panes.
+  </p>
+  <nav class="toc">
+    <a href="#start">Getting started</a><a href="#top-bar">Header</a><a href="#usage">Usage</a><a href="#needs-you">Needs you</a><a href="#spaces">Spaces</a><a href="#git">Git line</a>
+    <a href="#create">Create, rename, close</a><a href="#agents">Agents &amp; colors</a><a href="#shells">Shells</a><a href="#terminals">Pane tabs</a>
+    <a href="#actions">Actions</a><a href="#elsewhere">Status bar &amp; alerts</a><a href="#follow">Follow mode</a><a href="#plugin">Herdr plugin</a><a href="#offline">When Herdr isn't running</a>
+    <a href="#keys">Keyboard</a><a href="#settings">Settings</a><a href="#privacy">Privacy &amp; safety</a><a href="#trouble">Troubleshooting</a>
+  </nav>
+</header>
+
+<section id="start">
+  <h2>Getting started</h2>
+  <ol>
+    <li><b>Make sure Herdr runs.</b> If it doesn't, the sidebar offers <b>Start Herdr</b> (see <a href="#offline">When Herdr isn't running</a>).</li>
+    <li><b>Click a space.</b> Its folder is added to the project as a content root and every agent and shell opens as an editor tab.</li>
+    <li><b>Optional:</b> the <a href="#plugin">Herdr plugin</a> jumps here from Herdr in your terminal, and <b>Show plan limits…</b> in <a href="#usage">Usage</a> adds Claude Code's limits.</li>
+  </ol>
+</section>
+
+<section id="top-bar">
+  <h2>Header</h2>
+  <p>The top of the tool window has two rows: the IDE's title bar for the tool window, then the sidebar's own toolbar.</p>
+  <table>
+    <tr><th>Title bar</th><th>What it does</th></tr>
+    <tr><td><span class="codicon codicon-list-flat"></span> Switch Herdr Space…</td><td>Pick a space by name and switch to it.</td></tr>
+    <tr><td><span class="codicon codicon-refresh"></span> Refresh</td><td>Re-reads everything from Herdr now. Rarely needed: the view updates by itself.</td></tr>
+    <tr><td><span class="codicon codicon-settings-gear"></span> Settings</td><td>Opens <b>Settings | Tools | Herdr Cockpit</b> (listed <a href="#settings">below</a>).</td></tr>
+    <tr><td><span class="codicon codicon-question"></span> Help</td><td>Opens this page.</td></tr>
+  </table>
+  <div class="demo top">
+    <div class="stats">
+      <span class="stat st-blocked"><span class="codicon codicon-warning"></span><span class="n">1</span> blocked</span>
+      <span class="stat st-done"><span class="codicon codicon-pass-filled"></span><span class="n">2</span> done</span>
+      <span class="stat st-working"><span class="codicon codicon-sync spin"></span><span class="n">1</span> working</span>
+      <span class="stat st-idle"><span class="codicon codicon-circle-filled"></span><span class="n">3</span> idle</span>
+    </div>
+    <div class="tools">
+      <span class="icon-btn" aria-pressed="true"><span class="codicon codicon-terminal"></span></span>
+    </div>
+  </div>
+  <table>
+    <tr><th>Toolbar</th><th>What it does</th></tr>
+    <tr><td>Counters</td><td>Your agents by status across all spaces. Click <b>blocked</b> or <b>done</b> to jump straight to the agent that
+      needs you (blocked first). With no agents running it reads "<i>N</i> spaces · <i>N</i> agents".</td></tr>
+    <tr><td><span class="codicon codicon-terminal"></span> Shells</td><td>Shows or hides plain shell panes in every space (highlighted = shown).</td></tr>
+  </table>
+  <p>Further down, <b>Usage</b> and <b>Spaces</b> are section headings: click <b>Usage</b> to fold it, and use the
+    <span class="codicon codicon-add"></span> next to <b>Spaces</b> to create a space. <b>Tools | Herdr</b> has Switch Space,
+    Jump to Agent That Needs You, Refresh and Open Herdr TUI; assign keys to them in <b>Settings | Keymap</b>.</p>
+</section>
+
+<section id="usage">
+  <h2>Usage</h2>
+  <p>How much of each agent's plan you've used, for the agents <b>running in Herdr right now</b>: close every Codex pane
+    and Codex disappears from here (and isn't checked). Refreshed once a minute while the sidebar is visible. Click
+    <b>Usage</b> to fold it into a one-line summary (each agent's 5-hour window, or Kiro's month). With none of these agents
+    running, the section is hidden.</p>
+  <div class="demo">
+    <div class="usage">
+      <div class="usage-row"><div class="avatar logo small" data-logo="claude"></div><div class="main">
+        <div class="line1"><span class="name">Claude Code</span><span class="umeta">as of 2m ago</span></div>
+        <div class="meter lvl-warn"><span class="ml">5h</span><span class="bar"><span class="fill w72"></span></span><span class="pct">72%</span><span class="reset">↻ 1h 19m</span></div>
+        <div class="meter lvl-ok"><span class="ml">7d</span><span class="bar"><span class="fill w18"></span></span><span class="pct">18%</span><span class="reset">↻ 2d 23h</span></div>
+        <div class="ustat">This session: <b>1.7M</b> tokens</div></div></div>
+      <div class="usage-row"><div class="avatar logo small" data-logo="codex"></div><div class="main">
+        <div class="line1"><span class="name">Codex</span><span class="umeta">Business · live</span></div>
+        <div class="meter lvl-high"><span class="ml">5h</span><span class="bar"><span class="fill w91"></span></span><span class="pct">91%</span><span class="reset">↻ 24m</span></div></div></div>
+      <div class="usage-row"><div class="avatar logo small" data-logo="kiro"></div><div class="main">
+        <div class="line1"><span class="name">Kiro</span></div>
+        <div class="meter lvl-ok"><span class="ml">mo</span><span class="bar"><span class="fill w18"></span></span><span class="pct">18%</span><span class="reset">↻ 26d</span></div>
+        <div class="ustat"><b>182.4</b> / 1,000 credits this month · 6.1 today</div></div></div>
+    </div>
+  </div>
+  <dl>
+    <dt>Bars (5h, 7d)</dt>
+    <dd>The share of your plan's 5-hour and weekly limits used, and when each window resets (<b>↻</b>). Blue below 60%,
+      orange from 60%, red from 85%. <b>reset</b> means the window has started over since the agent last reported, so it's at 0%.</dd>
+    <dt>live / as of</dt>
+    <dd><b>live</b>: fetched from the provider just now. <b>as of …</b>: when the agent last reported the numbers; they update while you use it.</dd>
+    <dt>Codex</dt>
+    <dd>Live: every 5 minutes the sidebar asks Codex itself (the same data as Codex's <code>/usage</code>, so it includes Codex use on
+      other machines and in the IDE). Codex signs that request with its own login; Herdr never sees it. If Codex can't answer, the
+      sidebar falls back to Codex's session logs, which are only as fresh as your last Codex prompt.</dd>
+    <dt>Claude Code</dt>
+    <dd>The bars match Claude's own <code>/usage</code> ("Current session" and "Current week (all models)"). Per-model weekly limits
+      (such as "Current week (Fable)") aren't shared outside Claude Code, so they're not shown. <b>This session</b> counts the tokens
+      Claude Code used on this machine in the current 5-hour session (input, output and cache writes; hover for cache reads). Without plan
+      limits the session window is estimated from your first message (<b>5-hour block (est.)</b>). Claude Code shares its plan-limit
+      percentages only with a status line, so the bars appear after you click <b>Show plan limits…</b>: Herdr adds a small
+      status line to <code>~/.claude/settings.json</code> (backed up first; it shows "5h 42% · 7d 18%" under the Claude prompt and
+      hides some of Claude Code's footer hints). It works for claude.ai Pro and Max plans; numbers appear after the next
+      Claude reply. To undo, remove <code>statusLine</code> from that file. If you already have a status line, Herdr leaves it alone
+      and shows how to add the capture to it.</dd>
+    <dt>Kiro</dt>
+    <dd>Credits used today and this month, from Kiro's session files (Kiro CLI on this machine). Kiro doesn't share your plan's
+      allowance with other tools, so click <b>Set monthly credits…</b> once and enter the number from Kiro's <code>/usage</code>
+      (setting <b>Kiro monthly credits</b>); the <b>mo</b> bar then shows how much of it you've used, renewing on the 1st.
+      "Used" counts Kiro CLI on this machine only (not the Kiro IDE or other computers), and the calendar month stands in for your billing cycle.</dd>
+  </dl>
+</section>
+
+<section id="needs-you">
+  <h2>Needs you</h2>
+  <p>Appears at the top only when an agent is <b>blocked</b> (waiting for your answer) or <b>done</b> (finished, waiting for
+    you to look). Each card says which space it's in and shows the end of the agent's screen: the question it's asking, or
+    the wrap-up of what it did. Click the card to open that agent.</p>
+  <div class="demo attention">
+    <div class="row agent st-blocked">
+      <div class="avatar logo" data-logo="claude"></div>
+      <div class="main">
+        <div class="line1"><span class="name">Claude</span><span class="state">Blocked <span class="t">2m</span></span></div>
+        <div class="where">api-service</div>
+        <div class="sub">Migrate auth middleware</div>
+        <div class="term"><div>Bash command</div><div>npm run db:migrate</div><div>Do you want to proceed?</div><div>❯ 1. Yes</div><div>2. No, and tell Claude what to do differently</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="spaces">
+  <h2>Spaces</h2>
+  <p>Each Herdr space is a card.</p>
+  <div class="demo">
+    <section class="space st-working open herdr-focused">
+      <div class="space-head"><span class="chev"><span class="codicon codicon-chevron-down"></span></span><span class="space-name">api-service</span></div>
+      <div class="space-meta">
+        <span class="m branch"><span class="codicon codicon-git-branch"></span><span class="bn">feat/auth</span><span class="age">2h</span></span>
+        <span class="m sync"><span class="codicon codicon-arrow-up"></span>2</span>
+        <span class="m changes"><span class="g-modified"><span class="codicon codicon-circle-filled"></span>3 modified</span><span class="g-new"><span class="codicon codicon-add"></span>1 new</span><span class="review"><span class="codicon codicon-diff"></span>Review</span></span>
+      </div>
+      <div class="space-body">
+        <div class="row agent st-working"><div class="avatar logo" data-logo="codex"></div><div class="main"><div class="line1"><span class="name">Codex</span><span class="state"><span class="codicon codicon-sync spin"></span>Working <span class="t">4m</span></span></div><div class="sub">Add rate limiting to the login route</div></div><div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-down"></span></span></div></div>
+      </div>
+    </section>
+    <section class="space st-idle">
+      <div class="space-head"><span class="chev"><span class="codicon codicon-chevron-down"></span></span><span class="space-name">docs-site</span><span class="dots"><span class="dot st-idle"></span><span class="dot st-idle"></span></span></div>
+      <div class="space-meta"><span class="m branch"><span class="codicon codicon-git-branch"></span><span class="bn">main</span><span class="age">3d</span></span><span class="m muted"><span class="codicon codicon-check"></span>synced</span><span class="m clean"><span class="codicon codicon-pass"></span>clean</span></div>
+    </section>
+  </div>
+  <dl>
+    <dt>Click the space name</dt>
+    <dd>Expands it and collapses the other cards, then switches to it: adds its folder to the project as a content root
+      (replacing only the root the plugin added for the previous space), focuses it in Herdr, closes the previous space's tabs and
+      opens <b>every pane of the space as its own editor tab</b>: agents first (most urgent first), then shells. Turn off
+      <b>Include shell panes</b> to open agents only.</dd>
+    <dt><span class="codicon codicon-chevron-down"></span> Chevron</dt>
+    <dd>Collapses or expands the card without switching. A collapsed card shows one colored dot per agent.</dd>
+    <dt>Colored bar on the left edge</dt>
+    <dd>The most urgent agent in the space: orange blocked, green done, blue working. No bar when everything is idle.</dd>
+    <dt>Blue outline</dt>
+    <dd>The space that is currently focused in Herdr (for example in your terminal).</dd>
+    <dt>Hover the name</dt>
+    <dd>Shows the space's folder.</dd>
+    <dt><span class="codicon codicon-add"></span> New tab</dt>
+    <dd>The dashed row at the bottom of an open card. See <a href="#create">Create, rename and close</a>.</dd>
+  </dl>
+</section>
+
+<section id="git">
+  <h2>Git line</h2>
+  <p>Under each space name: the state of the repository in the space's folder. Refreshed every few seconds.</p>
+  <table>
+    <tr><th>Shows</th><th>Meaning</th></tr>
+    <tr><td><span class="space-meta inline"><span class="m branch"><span class="codicon codicon-git-branch"></span><span class="bn">feat/auth</span><span class="age">2h</span></span></span></td><td>Current branch and how long ago the last commit was. Hover for the commit message. <span class="codicon codicon-repo-forked"></span> instead of the branch icon means a Herdr-managed git worktree.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="m sync"><span class="codicon codicon-arrow-up"></span>2<span class="codicon codicon-arrow-down"></span>1</span></span></td><td>Commits to push (↑) and to pull (↓) relative to the upstream branch.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="m muted"><span class="codicon codicon-check"></span>synced</span></span></td><td>Same commits as the upstream branch.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="m muted"><span class="codicon codicon-cloud-upload"></span>no upstream</span></span></td><td>The branch doesn't track a remote branch: it was never pushed, or was pushed without <code>-u</code>.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="m clean"><span class="codicon codicon-pass"></span>clean</span></span></td><td>No uncommitted changes.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="g-conflict"><span class="codicon codicon-warning"></span>1 conflict</span></span></td><td>Files with unresolved merge or rebase conflicts.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="g-staged"><span class="codicon codicon-circle-filled"></span>2 staged</span></span></td><td>Changes added to the index, ready to commit.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="g-modified"><span class="codicon codicon-circle-filled"></span>3 modified</span></span></td><td>Tracked files changed but not staged.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="g-new"><span class="codicon codicon-add"></span>1 new</span></span></td><td>Untracked files.</td></tr>
+    <tr><td><span class="space-meta inline"><span class="m changes"><span class="review"><span class="codicon codicon-diff"></span>Review</span></span></span></td><td>Click the change counts or <b>Review</b> to open every changed file as last commit ↔ working tree diffs in one diff view (step through the files with the arrows). Only in trusted projects.</td></tr>
+  </table>
+</section>
+
+<section id="create">
+  <h2>Create, rename and close</h2>
+  <dl>
+    <dt><span class="codicon codicon-add"></span> New space (next to "Spaces")</dt>
+    <dd>Pick <b>Choose a folder…</b>, or <b>New git worktree of</b> an existing space: a separate checkout on a new branch, so
+      an agent can work without touching your current branch (Herdr puts it in <code>~/.herdr/worktrees/&lt;repo&gt;/&lt;branch&gt;</code>).
+      Then name it and choose what to start. The new pane opens as an editor tab right away.</dd>
+    <dt><span class="codicon codicon-add"></span> New tab (bottom of a space card, or right-click a space)</dt>
+    <dd>Choose <b>Shell</b>, <b>Shell with a name…</b> or an agent. The agents listed first come from the
+      <b>Agents</b> setting; <b>More agents…</b> lists every agent Herdr can start. The tab opens right away;
+      an agent starts in it in the background (a notification shows progress).</dd>
+    <dt>Rename… (right-click)</dt>
+    <dd>Spaces take any name. Shells too (empty = use the tab name). Agent names are identifiers in Herdr: lowercase
+      letters, digits, <code>-</code> and <code>_</code> (for example <code>reviewer</code>). The open editor tab is renamed as well.</dd>
+    <dt>Close in Herdr… (right-click)</dt>
+    <dd>Stops the shell or agent, or a whole space, after asking. (Closing an editor tab can do this too: see <a href="#terminals">Pane tabs</a>.) For a
+      worktree space you can also delete its worktree folder; Herdr refuses if it has uncommitted changes and asks before forcing it.</dd>
+  </dl>
+  <p class="note">Herdr can report an agent as started even when that agent isn't installed. If a new agent tab shows
+    "command not found", install the agent's CLI first.</p>
+</section>
+
+<section id="agents">
+  <h2>Agents and status colors</h2>
+  <div class="demo">
+    <div class="row agent st-working">
+      <div class="avatar logo" data-logo="codex"></div>
+      <div class="main">
+        <div class="line1"><span class="name">Codex</span><span class="state"><span class="codicon codicon-sync spin"></span>Working <span class="t">4m</span></span></div>
+        <div class="sub">Add rate limiting to the login route</div>
+      </div>
+      <div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-down"></span></span></div>
+    </div>
+    <div class="row agent st-idle herdr-focused open">
+      <div class="avatar logo" data-logo="claude"></div>
+      <div class="main">
+        <div class="line1"><span class="name">Claude</span><span class="state">Idle <span class="t">12m</span></span></div>
+        <div class="sub">Fix date formatting in reports</div>
+        <div class="headline">Dates now use the ISO format and tests pass; next, check the report page and tell me whether to commit.</div>
+        <div class="chips"><span class="chip"><span class="codicon codicon-window"></span>reviews</span><span class="chip">opus</span></div>
+        <div class="cwd"><span class="codicon codicon-folder"></span>~/code/reports</div>
+      </div>
+      <div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-up"></span></span></div>
+    </div>
+  </div>
+  <dl>
+    <dt>Logo</dt><dd>Which agent it is (Claude, Codex, Kiro, Cursor, Copilot, Gemini and more). Agents without a known logo show their first letter.</dd>
+    <dt>Ring, corner dot and pill</dt><dd>The status, in the colors below. The dot pulses while an agent is working or blocked.</dd>
+    <dt>Time in the pill</dt><dd>How long the agent has been in this status, counted from when the IDE noticed the change (it restarts with the IDE).</dd>
+    <dt>Second line</dt><dd>The task title the agent set; without one, the gist of its latest reply (such as Claude's "recap").</dd>
+    <dt><span class="codicon codicon-chevron-down"></span> Details</dt><dd>Shows the rest: the full summary of the latest reply (or, for a blocked or done agent, the end of its screen), chips for the Herdr tab, model and other metadata, and the working folder. Click again (or press <kbd>←</kbd>) to hide. Each row remembers its choice.</dd>
+    <dt>Small blue dot after the name</dt><dd>The pane that is focused in Herdr.</dd>
+    <dt>Click the row</dt><dd>Opens the agent in an editor tab (or brings its tab forward).</dd>
+    <dt><span class="codicon codicon-diff"></span> on hover</dt><dd><b>Review changes</b>: the changed files in the agent's folder, with diffs.</dd>
+  </dl>
+  <table>
+    <tr><th>Status</th><th>Meaning</th><th>Alerts you</th></tr>
+    <tr class="st-blocked"><td><span class="state">Blocked</span></td><td>Waiting for your input: a permission prompt or a question.</td><td>Yes</td></tr>
+    <tr class="st-done"><td><span class="state">Done</span></td><td>Finished its task and you haven't looked yet.</td><td>Yes</td></tr>
+    <tr class="st-working"><td><span class="state"><span class="codicon codicon-sync spin"></span>Working</span></td><td>Busy thinking or running tools.</td><td>No</td></tr>
+    <tr class="st-idle"><td><span class="state">Idle</span></td><td>At its prompt, nothing new to see.</td><td>No</td></tr>
+    <tr class="st-unknown"><td><span class="state">Unknown</span></td><td>Herdr can't tell yet (for example, just started).</td><td>No</td></tr>
+  </table>
+  <p class="note">Which statuses alert you is set with <b>Notify when an agent is blocked / done</b>. If an agent sets a custom label for a status (for example "reviewing PR"), the pill shows that label in the status color.</p>
+</section>
+
+<section id="shells">
+  <h2>Shells</h2>
+  <p>Plain terminals in the space, grouped under <b>Shells · <i>N</i></b> with a summary such as "1 running · 1 error". Click
+    the group heading to fold it (it starts folded when a space has more than 3 shells). For each shell the sidebar asks
+    Herdr which program is in the foreground and reads its last lines of output. Click a shell to open it in an editor tab.</p>
+  <div class="demo">
+    <div class="row shell sh-prompt"><div class="avatar"><span class="codicon codicon-terminal"></span></div><div class="main"><div class="line1"><span class="name">DB tunnel</span><span class="state">at prompt</span></div><div class="cmd"><span class="sigil">$</span><span class="text">autossh -M 0 -f -N -L 5433:db:5432 jumphost</span></div></div><div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-down"></span></span></div></div>
+    <div class="row shell sh-live"><div class="avatar"><span class="codicon codicon-terminal"></span></div><div class="main"><div class="line1"><span class="name">Tab 3</span><span class="state">live output <span class="t">2s</span></span></div><div class="cmd"><span class="sigil">▶</span><span class="text">python app.py</span></div></div><div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-down"></span></span></div></div>
+    <div class="row shell sh-running"><div class="avatar"><span class="codicon codicon-terminal"></span></div><div class="main"><div class="line1"><span class="name">Tab 2</span><span class="state">running</span></div><div class="cmd"><span class="sigil">▶</span><span class="text">vi settings.yaml</span></div></div><div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-down"></span></span></div></div>
+    <div class="row shell sh-failed open"><div class="avatar"><span class="codicon codicon-terminal"></span></div><div class="main"><div class="line1"><span class="name">Deploy</span><span class="state">error</span></div><div class="cmd"><span class="sigil">$</span><span class="text">ssh deploy@10.0.0.5</span></div><div class="cmd typed"><span class="sigil">›</span><span class="text">ssh -v deploy@10.0.0.5</span></div><div class="term"><div>ssh: connect to host 10.0.0.5 port 22: Connection refused</div></div><div class="cwd"><span class="codicon codicon-folder"></span>~/code/api</div></div><div class="side"><span class="icon-btn expander"><span class="codicon codicon-chevron-up"></span></span></div></div>
+  </div>
+  <table>
+    <tr><th>Status</th><th>Meaning</th></tr>
+    <tr class="sh-prompt"><td><span class="state">at prompt</span></td><td>The shell is waiting for a command.</td></tr>
+    <tr class="sh-running"><td><span class="state">running</span></td><td>A program owns the terminal (server, editor, build…).</td></tr>
+    <tr class="sh-live"><td><span class="state">live output</span></td><td>Running, and its output changed in the last few seconds.</td></tr>
+    <tr class="sh-failed"><td><span class="state">error</span></td><td>Back at the prompt, and the last output looks like a failure ("error", "refused", "not found", a traceback…).</td></tr>
+  </table>
+  <dl>
+    <dt><code>$ …</code></dt><dd>The last command run at the prompt.</dd>
+    <dt><code>▶ …</code></dt><dd>The program running right now.</dd>
+    <dt><code>› …</code> (italic)</dt><dd>Typed at the prompt but not run yet.</dd>
+    <dt><span class="codicon codicon-chevron-down"></span> Details</dt><dd>Shows the last lines of output (not for full-screen programs like editors), anything typed but not run, the tab and the working folder.</dd>
+    <dt>Name</dt><dd>The pane's label in Herdr, else its tab's name, else <b>Tab N</b> for Herdr's numbered tabs. The editor tab uses the same name.</dd>
+  </dl>
+  <p class="note">Shell activity is read every few seconds, only while the sidebar is visible, and never leaves your machine.</p>
+</section>
+
+<section id="terminals">
+  <h2>Pane tabs</h2>
+  <ul>
+    <li>Click any agent or shell row to open it in an editor tab with the <b>same name</b> as the row. Clicking again brings the existing tab forward.</li>
+    <li>The tab is a terminal drawn from Herdr's live stream of the pane (<code>herdr terminal session control --takeover</code>): there is no shell inside it, so every key goes straight to the agent or shell in Herdr.</li>
+    <li>Selecting and copying work like in the IDE's terminal. The mouse wheel scrolls the pane's scrollback in Herdr.</li>
+    <li><b>Closing a tab only detaches</b>: the program keeps running in Herdr. With the setting <b>Closing a pane's tab yourself</b> set to <b>ask</b> or
+      <b>always</b>, closing a tab with its X closes the pane in Herdr too (ask: idle shells right away, agents and busy shells after asking).
+      Tabs the plugin closes, and closing the project or the IDE, never close anything in Herdr.</li>
+    <li>A pane renamed in Herdr renames its tab here within a few seconds. A pane closed in Herdr closes its tab.</li>
+    <li>If the stream ends (Herdr stopped, another client took the pane over), the tab keeps its last screen with a note. Close it, or click the row to open it again.</li>
+    <li><b>Open Herdr TUI</b> (<b>Tools | Herdr</b>, the status bar menu, the disconnected screens) runs Herdr's own full-screen interface in an editor tab, against the same session. Closing that tab ends only that client.</li>
+  </ul>
+</section>
+
+<section id="actions">
+  <h2>More actions (right-click)</h2>
+  <table>
+    <tr><th>On</th><th>Actions</th></tr>
+    <tr><td>Space</td><td><b>Switch to Space</b> · <b>Unmount Folder</b> (only a folder the plugin added) · <b>New Tab…</b> · <b>Review Changes</b> · <b>Rename…</b> · <b>Close in Herdr…</b> · <b>Show Raw</b></td></tr>
+    <tr><td>Agent</td><td><b>Open</b> · <b>Review Changes</b> · <b>Rename…</b> · <b>Close in Herdr…</b> · <b>Show Raw</b></td></tr>
+    <tr><td>Shell</td><td><b>Open</b> · <b>Rename…</b> · <b>Close in Herdr…</b> · <b>Show Raw</b></td></tr>
+  </table>
+  <p class="note">"Show Raw" opens Herdr's records for the item (and, for a pane, what the sidebar read of its activity) as JSON, useful when something looks wrong.</p>
+</section>
+
+<section id="elsewhere">
+  <h2>Status bar, badge and alerts</h2>
+  <ul>
+    <li><b>Status bar</b> (bottom right): <b>⬢ 1 blocked · 2 done</b> while agents need you, else <b>⬢ Herdr</b>; <b>⬢ Herdr: disconnected</b> when Herdr isn't connected.
+      Hover for the Herdr version and socket. Click it to jump to the agent that needs you (blocked first); with nothing waiting, it opens a menu with
+      Refresh, Start Herdr, Open Herdr TUI, Settings and Copy Diagnostics. Hide it with a right-click on the status bar.</li>
+    <li><b>Badge</b>: a red dot on the Herdr tool window icon while an agent is blocked.</li>
+    <li><b>Notifications</b> when an agent becomes blocked or done, with a <b>Show</b> button that opens it.</li>
+  </ul>
+</section>
+
+<section id="follow">
+  <h2>Follow mode</h2>
+  <p>When you switch spaces in Herdr itself (for example in your terminal), the IDE switches too (setting <b>Follow Herdr's focus</b>).
+    To avoid hijacking unrelated projects it only acts in projects where you've already switched a space from the sidebar.</p>
+</section>
+
+<section id="plugin">
+  <h2>The Herdr plugin: from Herdr's terminal to here</h2>
+  <p>The companion Herdr plugin (<code>herdr-plugin/</code> in this plugin's repository) works from Herdr's side. Install it with
+    <code>herdr plugin install tezmanian/herdr-cockpit/herdr-plugin</code>, then bind its actions to keys in Herdr's
+    <code>config.toml</code>, or run them from a terminal with <code>herdr plugin action invoke tezmanian.herdr-cockpit-jetbrains.open</code>
+    (or <code>.open-file</code>, <code>.review</code>):</p>
+  <dl>
+    <dt>Open in JetBrains IDE</dt><dd>Brings the IDE to the front and switches to the space you're in, with the focused pane's tab in front.</dd>
+    <dt>Open selected file in JetBrains IDE</dt><dd>Select a location in any pane (<code>src/app.php:42:7</code>, <code>app.ts(42,7)</code>, <code>app.ts#L42</code>, a Python traceback line) and it opens here at that line.</dd>
+    <dt>Review changes in JetBrains IDE</dt><dd>The focused space's changes as diffs.</dd>
+  </dl>
+  <p>The IDE tells the plugin where to find it in <code>~/.herdr-cockpit/jetbrains.json</code> (its built-in server's port and a random
+    token, readable only by you). Links only select a space, a pane or an existing file; a link for another Herdr session is refused.
+    With two JetBrains IDEs open, links go to the one started last.</p>
+</section>
+
+<section id="offline">
+  <h2>When Herdr isn't running</h2>
+  <p>Your spaces and agents live in the Herdr server, so without it the sidebar has nothing to show. It says why and offers the next step:</p>
+  <table>
+    <tr><th>The sidebar says</th><th>What to do</th></tr>
+    <tr><td>Herdr isn't running</td><td><b>Start Herdr</b> starts the server in the background, with no window and with a terminal-like environment (the IDE's own variables aren't passed on to your panes). It keeps running after you quit the IDE,
+      so your agents keep running too; stop it with <code>herdr server stop</code>. <b>Open Herdr TUI</b> runs Herdr's full interface in an editor tab instead.</td></tr>
+    <tr><td>Herdr stopped unexpectedly</td><td>It crashed and left its socket file behind. <b>Start Herdr</b> is safe: Herdr restores your spaces, tabs and folders.
+      Agents with a Herdr integration (such as Claude Code) resume their sessions; others come back as shells.</td></tr>
+    <tr><td>Herdr isn't installed</td><td><b>Install Herdr</b> opens herdr.dev. If it is installed somewhere unusual, set <b>herdr binary</b>.</td></tr>
+    <tr><td>This Herdr version isn't compatible</td><td>Herdr and Herdr Cockpit speak different protocol versions: update Herdr (<code>herdr update</code>) or Herdr Cockpit.</td></tr>
+    <tr><td>Herdr isn't answering</td><td>The server runs but doesn't respond: <b>Retry</b>, or <b>Copy diagnostics</b> for a bug report.</td></tr>
+  </table>
+  <dl>
+    <dt>Short interruptions</dt>
+    <dd>If the connection drops briefly (for example while Herdr updates), the sidebar keeps the last view, greyed out, with
+      <b>Reconnecting to Herdr…</b>. It reconnects by itself every few seconds (backing off to 10&nbsp;s).</dd>
+    <dt>If Herdr stops while you work</dt>
+    <dd>You get one notification (your agents stopped with it) and the status bar shows <b>⬢ Herdr: disconnected</b>. Open pane tabs keep their
+      last screen with a note that the stream ended.</dd>
+    <dt>Copy diagnostics</dt>
+    <dd>Copies the connection state, the herdr path and socket path the plugin uses, and its recent log, for a bug report. It includes local
+      file paths, so check it before sharing.</dd>
+  </dl>
+  <p><button class="btn" data-cmd="startServer"><span class="codicon codicon-play"></span> Start Herdr</button> <button class="btn secondary" data-cmd="openTui">Open Herdr TUI</button></p>
+</section>
+
+<section id="keys">
+  <h2>Keyboard</h2>
+  <table>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move between spaces, agents and shells</td></tr>
+    <tr><td><kbd>Enter</kbd> / <kbd>Space</kbd></td><td>Same as clicking (switch space, open terminal, toggle group)</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>On a space: collapse / expand. On an agent or shell: hide / show its details.</td></tr>
+  </table>
+</section>
+
+<section id="settings">
+  <h2>Settings</h2>
+  <p>In <b>Settings | Tools | Herdr Cockpit</b>. They apply to the whole IDE, so a project can't choose the program the plugin runs or the socket it talks to.</p>
+  <p><button class="btn" data-cmd="openSettings"><span class="codicon codicon-settings-gear"></span> Open settings</button></p>
+  <table class="settings">
+    <tr><th>Setting</th><th>What it does</th></tr>
+    <tr><td>herdr binary<div class="def">default: empty</div></td><td>Path to <code>herdr</code>. Empty: <code>~/.local/bin</code>, Homebrew, <code>/usr/bin</code> and the other usual folders, then PATH.</td></tr>
+    <tr><td>Socket<div class="def">default: empty</div></td><td>Herdr's socket. Empty: <code>HERDR_SOCKET_PATH</code>, <code>HERDR_SESSION</code>, else <code>~/.config/herdr/herdr.sock</code>. A <code>…/sessions/&lt;name&gt;/herdr.sock</code> path selects that session.</td></tr>
+    <tr><td>Add the space's folder as a content root<div class="def">default: on</div></td><td>Switching a space adds its folder to the project; only roots the plugin added are ever removed.</td></tr>
+    <tr><td>Open a tab for every pane<div class="def">default: on</div></td><td>Switching a space opens its panes as editor tabs.</td></tr>
+    <tr><td>Include shell panes<div class="def">default: on</div></td><td>…shells too, not only agents.</td></tr>
+    <tr><td>Close the tabs of other spaces<div class="def">default: on</div></td><td>Switching a space closes the other spaces' tabs (they only detach).</td></tr>
+    <tr><td>Follow Herdr's focus<div class="def">default: on</div></td><td>See <a href="#follow">Follow mode</a>.</td></tr>
+    <tr><td>Show shell panes<div class="def">default: on</div></td><td>Shell rows in the sidebar (also the <span class="codicon codicon-terminal"></span> toggle).</td></tr>
+    <tr><td>Notify when an agent is blocked / done<div class="def">default: on / on</div></td><td>Notifications on these transitions.</td></tr>
+    <tr><td>Kiro monthly credits<div class="def">default: 0</div></td><td>Your Kiro plan's allowance; 0 hides the bar.</td></tr>
+    <tr><td>Closing a pane's tab yourself<div class="def">default: never</div></td><td>never: only detaches. ask: closes idle shells in Herdr too, asks for agents and busy shells. always: closes it in Herdr. The last pane of a space always asks.</td></tr>
+    <tr><td>Agents<div class="def">default: claude, codex, kiro, cursor</div></td><td>Listed first when you create a tab; the rest are under "More agents…".</td></tr>
+  </table>
+</section>
+
+<section id="privacy">
+  <h2>Privacy and safety</h2>
+  <ul>
+    <li>Everything shown comes from your Herdr server and from files on this machine. Shell output, agent screens and usage
+      numbers never leave your computer. The only network request is Codex's own usage check, which Codex makes with its own login.</li>
+    <li>Herdr Cockpit never reads the agents' logins or tokens. Claude's plan limits come only from the status line you opt into.</li>
+    <li>The git line and Review run only in trusted projects. On top of that, every git call switches off the commands a repository can
+      define for itself that are known to run during a status check (fsmonitor, file filters, hooks).</li>
+    <li>Links from the <a href="#plugin">Herdr plugin</a> need the random token in <code>~/.herdr-cockpit/jetbrains.json</code>; requests from web pages are refused.</li>
+  </ul>
+</section>
+
+<section id="trouble">
+  <h2>Troubleshooting</h2>
+  <dl>
+    <dt>The sidebar says Herdr isn't running, installed or answering</dt><dd>See <a href="#offline">When Herdr isn't running</a>. If you use a named Herdr session or a custom socket, set <b>Socket</b>.</dd>
+    <dt>A pane tab won't open</dt><dd>An IDE started from the Dock or an app launcher may not find <code>herdr</code> on PATH. Set <b>herdr binary</b>.</dd>
+    <dt>Keys like <kbd>Ctrl</kbd>+<kbd>B</kbd> don't reach Herdr</dt><dd>The IDE's keymap may take them first. Remove the conflicting shortcut in <b>Settings | Keymap</b>.</dd>
+    <dt>Agents show up as shells running "zsh (kiro-cli-term)"</dt><dd>Kiro's shell integration wrapped Herdr's pane shells, which hides agents from
+      Herdr. Stop Herdr (<code>herdr server stop</code>) and click <b>Start Herdr</b> again: panes then start without the wrapper.</dd>
+    <dt>No git line under a space</dt><dd>The folder isn't a git repository, or the project isn't trusted.</dd>
+    <dt>An agent is missing from Usage</dt><dd>Usage lists only Claude Code, Codex and Kiro, and only while one of their panes is open in Herdr.</dd>
+    <dt>Claude Code shows no bars</dt><dd>Click <b>Show plan limits…</b>. Bars need a claude.ai Pro or Max plan and appear after Claude's next reply.</dd>
+    <dt>Codex shows "as of …" instead of "live"</dt><dd>The live check couldn't reach Codex (not installed where the IDE looks, or logged out); the numbers come from its logs instead.</dd>
+    <dt>Something looks wrong</dt><dd>Right-click it → <b>Show Raw</b>, or <b>Copy Diagnostics</b> from the status bar menu. <b>Help | Show Log</b> has the plugin's log lines.</dd>
+  </dl>
+  <p><button class="btn secondary" data-cmd="refresh"><span class="codicon codicon-refresh"></span> Refresh now</button></p>
+</section>

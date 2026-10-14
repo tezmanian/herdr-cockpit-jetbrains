@@ -3,7 +3,8 @@
 A community (unofficial) client for [Herdr](https://herdr.dev) in PhpStorm and other JetBrains IDEs: Herdr's spaces,
 agents and shells in the IDE. A port of [Herdr Cockpit for VS Code](https://github.com/sriharirao92/vscode-herdr-cockpit)
 (MIT, see `LICENSE.upstream`). This port is MIT licensed too (`LICENSE`). The sidebar renderer (`media/panel.js`, `panel.css`), agent logos and codicons come
-from that project unchanged (see `THIRD_PARTY_NOTICES.md`).
+from that project unchanged (see `THIRD_PARTY_NOTICES.md`); `media/help.html` is adapted from its help page, and
+`herdr-plugin/` reuses helpers of its Herdr plugin.
 
 The plugin is a **client of the Herdr server**. It never owns agent processes; Herdr does.
 
@@ -25,9 +26,10 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   space's repository. **New tab** (in every space): a shell, a named shell, or an agent (your favorites first, the
   rest under "More agents…"). The new pane opens as an editor tab right away; an agent is started in it in the
   background. Herdr's own focus doesn't jump (`focus:false`).
-- **Right-click a space or pane** in the sidebar: open, new tab, rename (space; shell label; agent name), close in
-  Herdr after confirming (a pane, its tab when it's the only pane, a space, or a worktree space with its folder;
-  forcing is offered when Herdr refuses because of uncommitted changes).
+- **Right-click a space or pane** in the sidebar: switch to it, unmount its folder (only a content root the plugin
+  added), open, new tab, rename (space; shell label; agent name), close in Herdr after confirming (a pane, its tab
+  when it's the only pane, a space, or a worktree space with its folder; forcing is offered when Herdr refuses because
+  of uncommitted changes), and "Show Raw" (Herdr's records for it as a read-only JSON tab).
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
   HEAD ↔ working tree diffs in one diff view (step through the files with the arrows). Uses the git CLI, so it also
   works for spaces that aren't mounted; only in trusted projects.
@@ -36,15 +38,27 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   "Show plan limits…", which never replaces an existing one; tokens of the current 5-hour session), Codex (live from
   `codex app-server`, at most every 5 minutes, else its session logs), Kiro (credits this month/today; the allowance
   is the setting "Kiro monthly credits"). Nothing leaves the machine.
+- **Open Herdr TUI** (disconnected screens, *Tools | Herdr*): `herdr` in an editor tab (a real PTY), against the same
+  session as the plugin. Closing the tab ends only that client.
+- **Status bar** "⬢ 1 blocked · 2 done" (click: jump to that agent; otherwise a menu with Refresh, Start Herdr, Open
+  Herdr TUI, Settings, Copy Diagnostics) and a red badge on the tool window icon while an agent is blocked.
+- **Help** (`?` in the tool window's title bar, "Help" on the disconnected screens): "How to read the Herdr sidebar"
+  in an editor tab, adapted from the VS Code extension's help page.
+- **From Herdr to the IDE** with the Herdr plugin in `herdr-plugin/` (`herdr plugin install tezmanian/herdr-cockpit/herdr-plugin`):
+  "Open in JetBrains IDE" (the space and pane you're on), "Open selected file" (`path:line:col` and similar forms) and
+  "Review changes". It calls the IDE's built-in server (`/api/herdr-cockpit/…`) with the port and a random per-run
+  token from `~/.herdr-cockpit/jetbrains.json` (owner-only); requests with an `Origin` (web pages) are refused, and
+  links only select an existing space, pane or file of the IDE's own Herdr session. With two JetBrains IDEs open, the
+  one started last gets the links.
 - Optional: closing a pane's editor tab yourself also closes it in Herdr (setting "Closing a pane's tab yourself":
   never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
 - Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, switching behaviour, notifications, agents offered
   for new tabs, closing tabs, Kiro monthly credits).
 
-## Not ported yet
+## Not ported
 
-The Herdr plugin for jumping from Herdr to the IDE (deep links), Open Herdr TUI.
-These buttons exist in the sidebar but show "not available in the JetBrains port yet".
+VS Code-only parts: the Cockpit window, terminal profiles (`+`/split in the terminal panel), the walkthrough. The
+sidebar's "Set up Cockpit window" link shows "not available in the JetBrains port".
 
 ## Build and install
 
@@ -91,5 +105,9 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `ViewState.kt` | JSON for `media/panel.js` (same shape as the VS Code extension's `viewState.ts`) |
 | `HerdrService.kt` | per-project sync loop, connection states, switching, mounting, notifications |
 | `HerdrToolWindow.kt` | JCEF tool window, `acquireVsCodeApi()` shim, theme → `--vscode-*` variables, actions |
-| `HerdrPaneEditor.kt`, `HerdrTtyConnector.kt` | pane editor tabs: JBTerminalWidget + TtyConnector over `terminal session control` |
+| `HerdrPaneEditor.kt`, `HerdrTtyConnector.kt` | pane editor tabs: JBTerminalWidget + TtyConnector over `terminal session control`; the Herdr TUI tab (pty4j) |
+| `HerdrManage.kt` | dialogs and popups: new space/tab, rename, close, review, context menu, Show Raw, usage setup |
+| `HerdrStatusBar.kt` | status bar widget and tool window badge |
+| `HerdrHelp.kt` | help page (`media/help.html`) in a JCEF editor tab |
+| `HerdrLinks.kt` | links from the Herdr plugin: built-in server endpoint, `~/.herdr-cockpit/jetbrains.json` |
 | `HerdrSettings.kt` | application settings + configurable |

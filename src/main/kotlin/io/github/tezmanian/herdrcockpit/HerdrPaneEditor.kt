@@ -1,5 +1,6 @@
 // Each Herdr pane opens as an editor tab holding a JediTerm terminal that streams the pane (see
 // HerdrTtyConnector). Closing the tab only detaches: the program keeps running in Herdr.
+// The Herdr TUI itself (`herdr` in a real PTY) opens the same way as HerdrTuiFile.
 package io.github.tezmanian.herdrcockpit
 
 import com.intellij.icons.AllIcons
@@ -18,6 +19,10 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.terminal.JBTerminalSystemSettingsProviderBase
 import com.intellij.terminal.JBTerminalWidget
 import com.intellij.testFramework.LightVirtualFile
+import com.jediterm.core.util.TermSize
+import com.jediterm.terminal.ProcessTtyConnector
+import com.pty4j.PtyProcessBuilder
+import com.pty4j.WinSize
 import java.awt.event.MouseWheelEvent
 import java.beans.PropertyChangeListener
 import javax.swing.Icon
@@ -38,9 +43,22 @@ class HerdrPaneFile(val paneId: String, val spaceId: String, var title: String, 
     override fun getPath(): String = "herdr://$paneId"
 }
 
+/** The Herdr TUI's tab: one per project. */
+class HerdrTuiFile : LightVirtualFile("Herdr", PlainTextFileType.INSTANCE, "") {
+    init {
+        isWritable = false
+    }
+
+    override fun getPath(): String = "herdr://tui"
+}
+
 class HerdrPaneEditorProvider : FileEditorProvider, DumbAware {
-    override fun accept(project: Project, file: VirtualFile) = file is HerdrPaneFile
-    override fun createEditor(project: Project, file: VirtualFile): FileEditor = HerdrPaneEditor(project, file as HerdrPaneFile)
+    override fun accept(project: Project, file: VirtualFile) = file is HerdrPaneFile || file is HerdrTuiFile || file is HerdrHelpFile
+    override fun createEditor(project: Project, file: VirtualFile): FileEditor = when (file) {
+        is HerdrTuiFile -> HerdrTuiEditor(project, file)
+        is HerdrHelpFile -> HerdrHelpEditor(project, file)
+        else -> HerdrPaneEditor(project, file as HerdrPaneFile)
+    }
     override fun getEditorTypeId() = "herdr-pane"
     override fun getPolicy() = FileEditorPolicy.HIDE_DEFAULT_EDITOR
 }
@@ -85,11 +103,47 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
     }
 }
 
+/** `herdr` (the TUI client) in a PTY, against the same session as the plugin. Closing the tab ends only the client. */
+class HerdrTuiEditor(project: Project, private val file: HerdrTuiFile) : UserDataHolderBase(), FileEditor {
+    private val widget = JBTerminalWidget(project, JBTerminalSystemSettingsProviderBase(), this)
+    private val proc = HerdrService.getInstance(project).let { s ->
+        PtyProcessBuilder(arrayOf(s.binary()))
+            // An IDE started from a Herdr pane inherits that pane's variables; with them herdr refuses to run "nested".
+            .setEnvironment(s.herdrEnvNow() - setOf("HERDR_ENV", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID") + ("TERM" to "xterm-256color"))
+            .setDirectory(project.basePath ?: System.getProperty("user.home"))
+            .setInitialColumns(120).setInitialRows(32)
+            .start()
+    }
+
+    init {
+        widget.start(object : ProcessTtyConnector(proc, Charsets.UTF_8) {
+            override fun getName() = "Herdr"
+            override fun resize(termSize: TermSize) { if (proc.isAlive) proc.winSize = WinSize(termSize.columns, termSize.rows) }
+        })
+    }
+
+    override fun getComponent(): JComponent = widget
+    override fun getPreferredFocusedComponent(): JComponent = widget.preferredFocusableComponent
+    override fun getName() = "Herdr"
+    override fun setState(state: FileEditorState) {}
+    override fun isModified() = false
+    override fun isValid() = true
+    override fun addPropertyChangeListener(listener: PropertyChangeListener) {}
+    override fun removePropertyChangeListener(listener: PropertyChangeListener) {}
+    override fun getFile(): VirtualFile = file
+    override fun dispose() { proc.destroy() }
+}
+
 class HerdrPaneTabTitleProvider : EditorTabTitleProvider, DumbAware {
     override fun getEditorTabTitle(project: Project, file: VirtualFile): String? = (file as? HerdrPaneFile)?.title
 }
 
 class HerdrPaneIconProvider : FileIconProvider {
     override fun getIcon(file: VirtualFile, @Iconable.IconFlags flags: Int, project: Project?): Icon? =
-        (file as? HerdrPaneFile)?.let { if (it.agent) AllIcons.Nodes.Plugin else AllIcons.Nodes.Console }
+        when (file) {
+            is HerdrPaneFile -> if (file.agent) AllIcons.Nodes.Plugin else AllIcons.Nodes.Console
+            is HerdrTuiFile -> AllIcons.Nodes.Console
+            is HerdrHelpFile -> AllIcons.Actions.Help
+            else -> null
+        }
 }
