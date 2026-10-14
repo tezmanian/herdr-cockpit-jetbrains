@@ -449,6 +449,15 @@
     vscode.postMessage({ type: 'cmd', command: act, spaceId, paneId });
   });
 
+  // JetBrains port: no VS Code webview/context menu, so the IDE shows its own popup for the right-clicked item.
+  app.addEventListener('contextmenu', (e) => {
+    const el = /** @type {HTMLElement|null} */ (/** @type {HTMLElement} */ (e.target).closest('[data-vscode-context]'));
+    e.preventDefault();
+    if (!el) return;
+    const c = JSON.parse(el.dataset.vscodeContext || '{}');
+    vscode.postMessage({ type: 'cmd', command: 'menu', spaceId: c.spaceId, paneId: c.paneId });
+  });
+
   app.addEventListener('keydown', (e) => {
     const el = /** @type {HTMLElement} */ (e.target);
     if ((e.key === 'Enter' || e.key === ' ') && el.matches('[data-nav]')) {

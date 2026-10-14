@@ -18,15 +18,19 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.project.ProjectManagerListener
 import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindowManager
 import java.awt.datatransfer.StringSelection
 import java.io.File
@@ -84,6 +88,9 @@ class HerdrService(private val project: Project) : Disposable {
     /** Open (or once opened) pane tabs, by pane id. */
     private val files = ConcurrentHashMap<String, HerdrPaneFile>()
 
+    /** The project (or the IDE) is closing: its tabs close then, but that only detaches. */
+    @Volatile private var closing = false
+
     @Volatile private var panelVisible = false
     private val listeners = mutableListOf<(String) -> Unit>()
     @Volatile private var lastState: String? = null
@@ -92,6 +99,20 @@ class HerdrService(private val project: Project) : Disposable {
         loop.scheduleWithFixedDelay({ guard { tick() } }, 0, 1500, TimeUnit.MILLISECONDS)
         activityExec.scheduleWithFixedDelay({ guard { pollActivity() } }, 2, 4, TimeUnit.SECONDS)
         loop.scheduleWithFixedDelay({ guard { if (model != null) render() } }, 15, 15, TimeUnit.SECONDS)
+        ApplicationManager.getApplication().messageBus.connect(this).subscribe(ProjectManager.TOPIC, object : ProjectManagerListener {
+            override fun projectClosing(p: Project) { if (p == project) closing = true }
+        })
+        project.messageBus.connect(this).subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, object : FileEditorManagerListener {
+            override fun fileClosed(source: FileEditorManager, file: VirtualFile) { if (file is HerdrPaneFile) closedTab(file) }
+        })
+    }
+
+    /** A pane's tab closed. The plugin's own closes drop it from `files` first; anything else was you. */
+    private fun closedTab(f: HerdrPaneFile) {
+        val mode = settings.closeTabInHerdr ?: "never"
+        if (mode == "never" || closing || files[f.paneId] !== f || f.ended || !isConnected()) return
+        val (space, pane) = model?.find(f.paneId) ?: return
+        loop.execute { guard { manage.closedTabByUser(space, pane, mode) } }
     }
 
     private fun guard(f: () -> Unit) = try { f() } catch (e: Throwable) { LOG.warn(e) }
@@ -415,6 +436,7 @@ class HerdrService(private val project: Project) : Disposable {
         val fem = FileEditorManager.getInstance(project)
         var f = files[pane.id]
         if (f != null && (f.ended || !fem.isFileOpen(f))) {
+            files.remove(pane.id)
             fem.closeFile(f)
             f = null
         }
@@ -444,6 +466,7 @@ class HerdrService(private val project: Project) : Disposable {
             "copyDiagnostics" -> copyDiagnostics()
             "newSpace" -> manage.newSpace()
             "newTab" -> m?.space(spaceId)?.let { manage.newTab(it) }
+            "menu" -> m?.space(spaceId)?.let { manage.menu(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "openTui" -> notify("Run <code>herdr</code> in a terminal to open the Herdr TUI.", NotificationType.INFORMATION)
             else -> notify("\"$command\" isn't available in the JetBrains port yet.", NotificationType.INFORMATION)
         }

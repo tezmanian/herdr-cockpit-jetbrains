@@ -1,4 +1,4 @@
-// New spaces and tabs from the IDE: the popups, folder chooser and input dialogs around HerdrActions.
+// New spaces and tabs, renames and closes from the IDE: the popups, folder chooser and dialogs around HerdrActions.
 // Every new pane opens straight away in an editor tab; an agent is then started in it, in the background.
 package io.github.tezmanian.herdrcockpit
 
@@ -17,6 +17,8 @@ import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.ui.awt.RelativePoint
+import java.awt.MouseInfo
 import java.io.File
 import javax.swing.Icon
 
@@ -28,7 +30,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
 
     private class Item(val text: String, val icon: Icon?, val separator: String? = null, val run: () -> Unit)
 
-    private fun choose(title: String, items: List<Item>) {
+    private fun choose(title: String?, items: List<Item>, atMouse: Boolean = false) {
         val step = object : BaseListPopupStep<Item>(title, items) {
             override fun getTextFor(value: Item) = value.text
             override fun getIconFor(value: Item) = value.icon
@@ -36,7 +38,9 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
             override fun isSpeedSearchEnabled() = true
             override fun onChosen(selectedValue: Item, finalChoice: Boolean): PopupStep<*>? = doFinalStep { selectedValue.run() }
         }
-        JBPopupFactory.getInstance().createListPopup(step).showCenteredInCurrentWindow(project)
+        val popup = JBPopupFactory.getInstance().createListPopup(step)
+        val mouse = if (atMouse) MouseInfo.getPointerInfo()?.location else null
+        if (mouse != null) popup.show(RelativePoint.fromScreen(mouse)) else popup.showCenteredInCurrentWindow(project)
     }
 
     private fun input(title: String, message: String, initial: String = "", error: (String) -> String? = { if (it.isBlank()) "Enter a name" else null }): String? =
@@ -104,6 +108,118 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         } ?: return
         pickWhat("Start in \"$name\"") { what -> createSpace(name, what) { actions.createWorktreeSpace(from.id, name, name) } }
     }
+
+    /** Right-click on a space or pane in the sidebar. */
+    fun menu(space: Space, pane: Pane?) {
+        if (!connected()) return
+        val items = buildList {
+            if (pane != null) add(Item("Open", AllIcons.Actions.MenuOpen) { service.attachPane(space, pane) })
+            else add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
+            add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
+            add(Item("Close in Herdr…", AllIcons.Actions.Close, "Herdr") { closeInHerdr(space, pane) })
+        }
+        choose(null, items, atMouse = true)
+    }
+
+    /** A space, or a pane (shells: the pane label; agents: the agent's name). */
+    fun rename(space: Space, pane: Pane?) {
+        if (pane == null) {
+            val label = input("Rename space", "Space name:", space.label) ?: return
+            run("Rename ${space.label}") { actions.renameSpace(space.id, label); service.scheduleRefresh() }
+            return
+        }
+        val current = paneName(space.tabs.firstOrNull { it.id == pane.tabId }, pane)
+        val value = if (pane.isAgent) {
+            input("Rename $current", "Agent name: lowercase letters, digits, - or _ (e.g. reviewer):", pane.agentName ?: pane.agentKind ?: "") {
+                if (!AGENT_NAME.matches(it.trim())) "Start with a letter; use lowercase letters, digits, - or _" else null
+            } ?: return
+        } else {
+            // Empty clears the label: Herdr falls back to the tab name.
+            Messages.showInputDialog(project, "Shell name (empty: use the tab name):", "Rename $current", null, pane.paneLabel ?: current, null)?.trim() ?: return
+        }
+        run("Rename $current") {
+            if (pane.isAgent) actions.renameAgent(pane.id, value) else actions.renamePane(pane.id, value.ifEmpty { null })
+            service.scheduleRefresh()
+        }
+    }
+
+    /** Closes a pane (its tab, when it's the only pane) or a whole space in Herdr, after confirming. */
+    fun closeInHerdr(space: Space, pane: Pane?) {
+        if (pane == null) return closeSpace(space)
+        val tab = space.tabs.firstOrNull { it.id == pane.tabId }
+        val name = paneName(tab, pane)
+        val what = if (pane.isAgent) "The agent" else "The shell and anything running in it"
+        if (Messages.showOkCancelDialog(project, "$what will stop. Closing the editor tab instead only detaches.", "Close \"$name\" in Herdr?", "Close", "Cancel", Messages.getWarningIcon()) != Messages.OK) return
+        run("Close $name") {
+            if (tab != null && tab.panes.size <= 1) actions.closeTab(tab.id) else actions.closePane(pane.id)
+            service.scheduleRefresh()
+        }
+    }
+
+    private fun closeSpace(space: Space) {
+        val agents = space.agents.size
+        val shells = space.panes.size - agents
+        val what = listOfNotNull(agents.takeIf { it > 0 }?.let { "$it agent${if (it > 1) "s" else ""}" }, shells.takeIf { it > 0 }?.let { "$it shell${if (it > 1) "s" else ""}" })
+            .joinToString(" and ").ifEmpty { "Everything" }
+        val title = "Close the space \"${space.label}\" in Herdr?"
+        val delete = if (space.linkedWorktree) {
+            when (Messages.showYesNoCancelDialog(project, "$what in it will stop. It's a git worktree at ${space.cwd}: \"Close Space\" keeps that folder, \"Close and Delete Worktree\" removes it (Herdr refuses if it has uncommitted changes).",
+                title, "Close Space", "Close and Delete Worktree", "Cancel", Messages.getWarningIcon())) {
+                Messages.YES -> false
+                Messages.NO -> true
+                else -> return
+            }
+        } else {
+            if (Messages.showOkCancelDialog(project, "$what in it will stop. Files on disk are not touched.", title, "Close Space", "Cancel", Messages.getWarningIcon()) != Messages.OK) return
+            false
+        }
+        if (delete) return removeWorktree(space, force = false)
+        run("Close ${space.label}") {
+            try {
+                actions.closeSpace(space.id)
+            } catch (e: HerdrError) {
+                if (e.code != "workspace_group_close_required") throw e
+                later {
+                    if (Messages.showOkCancelDialog(project, "Herdr closes a space together with its worktree spaces. Their worktree folders stay on disk.", "\"${space.label}\" has worktree spaces", "Close All", "Cancel", Messages.getWarningIcon()) == Messages.OK)
+                        run("Close ${space.label}") { actions.closeSpace(space.id, group = true); service.scheduleRefresh() }
+                }
+            }
+            service.scheduleRefresh()
+        }
+    }
+
+    private fun removeWorktree(space: Space, force: Boolean) {
+        run("Delete worktree ${space.label}") {
+            try {
+                actions.removeWorktree(space.id, force)
+            } catch (e: HerdrError) {
+                if (force) throw e
+                later {
+                    if (Messages.showOkCancelDialog(project, "${e.message}\n\nDelete it anyway? Uncommitted changes in ${space.cwd} will be lost.", "Herdr didn't delete the worktree \"${space.label}\"", "Delete Anyway", "Cancel", Messages.getWarningIcon()) == Messages.OK)
+                        removeWorktree(space, force = true)
+                }
+            }
+            service.scheduleRefresh()
+        }
+    }
+
+    /** You closed a pane's editor tab yourself (setting "closeTabInHerdr"): close the pane in Herdr too. Background thread. */
+    fun closedTabByUser(space: Space, pane: Pane, mode: String) {
+        val name = paneName(space.tabs.firstOrNull { it.id == pane.tabId }, pane)
+        val running = if (pane.isAgent) null else runCatching { actions.processInfo(pane.id) }.getOrNull()
+            ?.let(::leaderProcess)?.takeIf { !isShellProcess(it.name) }?.let(::describeProcess)
+        val last = space.panes.size == 1
+        val close = { run("Close $name") { actions.closePane(pane.id); service.log("closed ${pane.id} in Herdr (tab closed)"); service.scheduleRefresh() } }
+        if (!last && (mode == "always" || (!pane.isAgent && running == null))) return close()
+        val detail = listOfNotNull(
+            if (pane.isAgent) "$name is an agent: closing it in Herdr stops it." else running?.let { "It's running $it." },
+            if (last) "It's the last tab of \"${space.label}\", so Herdr closes the space too." else null,
+            "Keep Running leaves it in Herdr; click it in the sidebar to open it again.",
+        ).joinToString(" ")
+        later { if (Messages.showOkCancelDialog(project, detail, "Close $name in Herdr too?", "Close in Herdr", "Keep Running", Messages.getWarningIcon()) == Messages.OK) close() }
+    }
+
+    private fun later(f: () -> Unit) = ApplicationManager.getApplication().invokeLater(f, project.disposed)
 
     private fun createSpace(label: String, what: What, create: () -> Created) = run("Creating space \"$label\"") { indicator ->
         val c = create()

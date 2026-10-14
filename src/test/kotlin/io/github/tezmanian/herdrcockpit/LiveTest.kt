@@ -69,6 +69,12 @@ class LiveTest {
             actions.renameTab(tab.tabId!!, "renamed")
             val (sp, p) = normalize(client.request("session.snapshot")).find(tab.paneId)!!
             assertTrue(sp.id == space.workspaceId && sp.tabs.first { it.id == p.tabId }.label == "renamed")
+            actions.renamePane(tab.paneId, "pane-x")
+            actions.renameSpace(space.workspaceId, "$label-r")
+            val m2 = normalize(client.request("session.snapshot"))
+            assertTrue(m2.find(tab.paneId)!!.second.paneLabel == "pane-x" && m2.space(space.workspaceId)!!.label == "$label-r")
+            actions.closeTab(tab.tabId)
+            assertTrue("tab closed", normalize(client.request("session.snapshot")).find(tab.paneId) == null)
 
             val wt = actions.createWorktreeSpace(space.workspaceId, "hc/live", "hc/live")
             try {

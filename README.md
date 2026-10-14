@@ -25,13 +25,18 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   space's repository. **New tab** (in every space): a shell, a named shell, or an agent (your favorites first, the
   rest under "More agents…"). The new pane opens as an editor tab right away; an agent is started in it in the
   background. Herdr's own focus doesn't jump (`focus:false`).
+- **Right-click a space or pane** in the sidebar: open, new tab, rename (space; shell label; agent name), close in
+  Herdr after confirming (a pane, its tab when it's the only pane, a space, or a worktree space with its folder;
+  forcing is offered when Herdr refuses because of uncommitted changes).
+- Optional: closing a pane's editor tab yourself also closes it in Herdr (setting "Closing a pane's tab yourself":
+  never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
 - Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, switching behaviour, notifications, agents offered
-  for new tabs).
+  for new tabs, closing tabs).
 
 ## Not ported yet
 
-Rename / close in Herdr, Review changes (diff view), plan usage (Claude/Codex/Kiro), the
-Herdr plugin for jumping from Herdr to the IDE (deep links), Open Herdr TUI, right-click menus in the sidebar.
+Review changes (diff view), plan usage (Claude/Codex/Kiro), the
+Herdr plugin for jumping from Herdr to the IDE (deep links), Open Herdr TUI.
 These buttons exist in the sidebar but show "not available in the JetBrains port yet".
 
 ## Build and install

@@ -110,6 +110,27 @@ class ActionsTest {
     }
 
     @Test
+    fun renamesAndCloses() {
+        serve { _, _ -> "{}" }
+        actions.renamePane("w1:p7", null)
+        actions.renameAgent("w1:p7", "reviewer")
+        actions.closeSpace("w1")
+        actions.closeSpace("w1", group = true)
+        actions.removeWorktree("w2", force = true)
+        val sent = requests.map { it.str("method") to it.getAsJsonObject("params").toString() }
+        assertEquals(
+            listOf(
+                "pane.rename" to """{"pane_id":"w1:p7","label":null}""",
+                "agent.rename" to """{"target":"w1:p7","name":"reviewer"}""",
+                "workspace.close" to """{"workspace_id":"w1"}""",
+                "workspace.close" to """{"workspace_id":"w1","close_group":true}""",
+                "worktree.remove" to """{"workspace_id":"w2","force":true}""",
+            ),
+            sent,
+        )
+    }
+
+    @Test
     fun startAgentRetriesWhilePaneIsBusy() {
         var calls = 0
         serve { _, _ -> if (++calls < 3) "!agent_pane_busy" else """{"agent":{"pane_id":"w1:p7"}}""" }
@@ -138,6 +159,8 @@ class ActionsTest {
         assertEquals("claude-3", agentName("claude", listOf("claude", "claude-2")))
         assertEquals("agent", agentName("42", emptyList()))
         assertTrue(AGENT_NAME.matches(agentName("Mastra Code", emptyList())))
+        assertEquals("reviewer-bot", agentSlug("Reviewer Bot!"))
+        assertEquals(null, agentSlug("42 !"))
     }
 
     @Test

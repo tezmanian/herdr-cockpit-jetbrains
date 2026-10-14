@@ -133,7 +133,7 @@ fun summarizeAgent(text: String, status: AgentStatus): List<String> {
 
 data class ActivityTarget(val paneId: String, val agent: Boolean, val status: AgentStatus?)
 
-private fun parseProcInfo(r: JsonObject): ProcInfo? {
+fun parseProcInfo(r: JsonObject): ProcInfo? {
     val info = r.get("process_info")?.takeIf { it.isJsonObject }?.asJsonObject ?: return null
     val procs = info.get("foreground_processes")?.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { e ->
         val o = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null

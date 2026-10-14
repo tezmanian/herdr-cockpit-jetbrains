@@ -11,6 +11,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
@@ -37,6 +38,8 @@ class HerdrSettingsState : BaseState() {
     var notifyDone by property(true)
     /** Agents offered first for a new tab (any kind `herdr agent start --kind` accepts). */
     var agents by string("claude, codex, kiro, cursor")
+    /** Closing a pane's editor tab yourself: "never" only detaches, "ask" closes idle shells in Herdr and asks for the rest, "always" closes it. */
+    var closeTabInHerdr by string("never")
 }
 
 @Service(Service.Level.APP)
@@ -72,6 +75,12 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row { checkBox("Show shell panes").bindSelected(s::showShells) }
                 row { checkBox("Notify when an agent is blocked").bindSelected(s::notifyBlocked) }
                 row { checkBox("Notify when an agent is done").bindSelected(s::notifyDone) }
+            }
+            group("Closing tabs") {
+                row("Closing a pane's tab yourself:") {
+                    comboBox(listOf("never", "ask", "always")).bindItem({ s.closeTabInHerdr ?: "never" }, { s.closeTabInHerdr = it ?: "never" })
+                        .comment("never: only detaches, the pane keeps running in Herdr. ask: closes idle shells in Herdr too, asks for agents and busy shells. always: closes it in Herdr. The last pane of a space always asks.")
+                }
             }
             group("New tabs") {
                 row("Agents:") {

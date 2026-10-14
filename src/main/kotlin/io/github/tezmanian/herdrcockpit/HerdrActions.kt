@@ -12,6 +12,10 @@ val AGENT_NAME = Regex("^[a-z][a-z0-9_-]{0,31}$")
 private val BAD_BRANCH = Regex("""\s|\.\.|[~^:?*\[\\]|^[-/]|[/.]$|@\{""")
 fun isValidBranch(name: String) = name.isNotBlank() && !BAD_BRANCH.containsMatchIn(name.trim())
 
+/** A valid agent name from any text ("Reviewer Bot" -> "reviewer-bot"); null when nothing usable is left. */
+fun agentSlug(text: String): String? =
+    text.lowercase().replace(Regex("[^a-z0-9_-]+"), "-").replace(Regex("^[^a-z]+"), "").take(32).trimEnd('-').takeIf { AGENT_NAME.matches(it) }
+
 /** A free agent name for a new agent of this kind: "claude", then "claude-2", "claude-3", ... */
 fun agentName(kind: String, taken: Collection<String>): String {
     val base = kind.lowercase().replace(Regex("[^a-z0-9_-]"), "-").replace(Regex("^[^a-z]+"), "").take(28).ifEmpty { "agent" }
@@ -73,9 +77,36 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     fun createWorktreeSpace(workspaceId: String, branch: String, label: String?): Created =
         created(client.request("worktree.create", params("workspace_id" to workspaceId, "branch" to branch, "label" to label), 30_000))
 
-    fun renameTab(tabId: String, label: String) {
-        client.request("tab.rename", JsonObject().apply { addProperty("tab_id", tabId); addProperty("label", label) }, 5000)
+    /** Renames and closes: `kv` as given, null values sent as JSON null (Herdr's "clear the name"). */
+    private fun call(method: String, vararg kv: Pair<String, Any?>, timeoutMs: Long = 5000) {
+        client.request(method, JsonObject().apply {
+            for ((k, v) in kv) when (v) {
+                null -> add(k, com.google.gson.JsonNull.INSTANCE)
+                is Boolean -> addProperty(k, v)
+                else -> addProperty(k, v.toString())
+            }
+        }, timeoutMs)
     }
+
+    fun renameTab(tabId: String, label: String) = call("tab.rename", "tab_id" to tabId, "label" to label)
+    fun renameSpace(workspaceId: String, label: String) = call("workspace.rename", "workspace_id" to workspaceId, "label" to label)
+    /** null falls back to the tab name / "Tab N". */
+    fun renamePane(paneId: String, label: String?) = call("pane.rename", "pane_id" to paneId, "label" to label)
+    /** `name` must match AGENT_NAME (agent names are CLI targets); null clears it. */
+    fun renameAgent(paneId: String, name: String?) = call("agent.rename", "target" to paneId, "name" to name)
+
+    fun processInfo(paneId: String): ProcInfo? =
+        parseProcInfo(client.request("pane.process_info", JsonObject().apply { addProperty("pane_id", paneId) }, 5000))
+
+    /** Closing ends the processes in it. */
+    fun closePane(paneId: String) = call("pane.close", "pane_id" to paneId)
+    fun closeTab(tabId: String) = call("tab.close", "tab_id" to tabId)
+    /** Fails with "workspace_group_close_required" when the space has worktree spaces, unless `group` closes them too. */
+    fun closeSpace(workspaceId: String, group: Boolean = false) =
+        if (group) call("workspace.close", "workspace_id" to workspaceId, "close_group" to true) else call("workspace.close", "workspace_id" to workspaceId)
+    /** Closes a worktree space and deletes its folder. Herdr refuses uncommitted changes unless `force` (which discards them). */
+    fun removeWorktree(workspaceId: String, force: Boolean = false) =
+        if (force) call("worktree.remove", "workspace_id" to workspaceId, "force" to true, timeoutMs = 30_000) else call("worktree.remove", "workspace_id" to workspaceId, timeoutMs = 30_000)
 
     /**
      * Starts an agent in a pane at its shell prompt; returns once Herdr reports it ready. `name` must match
