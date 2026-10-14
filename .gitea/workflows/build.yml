@@ -24,7 +24,7 @@ jobs:
           restore-keys: gradle-
       - name: Test and build
         run: ./gradlew test buildPlugin --console=plain
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v3  # v4 needs the GitHub artifact service; Gitea speaks v3
         with:
           name: herdr-cockpit-plugin
           path: build/distributions/*.zip
