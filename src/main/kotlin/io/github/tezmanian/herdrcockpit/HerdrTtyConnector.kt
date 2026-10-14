@@ -46,14 +46,10 @@ class HerdrTtyConnector(
         .onUnmappableCharacter(CodingErrorAction.REPLACE)
     private var pending = ByteBuffer.allocate(0)
 
-    override fun init(q: com.jediterm.terminal.Questioner?): Boolean {
-        start()
-        return true
-    }
-
+    /** Starts the stream on first use (JediTerm resizes, then reads); the deprecated init() isn't needed. */
     @Synchronized
-    private fun start() {
-        if (proc != null) return
+    fun start() {
+        if (proc != null || ended || closedByUser) return
         val cmd = listOf(binary, "terminal", "session", "control", paneId, "--takeover", "--cols", size.columns.toString(), "--rows", size.rows.toString())
         val p = try {
             ProcessBuilder(cmd).apply {
@@ -115,6 +111,7 @@ class HerdrTtyConnector(
     val isEnded: Boolean get() = ended
 
     override fun read(buf: CharArray, offset: Int, length: Int): Int {
+        start()
         while (true) {
             val c = current
             if (c != null && pos < c.size) {
@@ -149,6 +146,7 @@ class HerdrTtyConnector(
 
     override fun resize(termSize: TermSize) {
         size = termSize
+        start()
         send(JsonObject().apply {
             addProperty("type", "terminal.resize")
             addProperty("cols", maxOf(1, termSize.columns))

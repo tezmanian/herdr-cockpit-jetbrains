@@ -459,7 +459,13 @@ class HerdrService(private val project: Project) : Disposable {
         if (spaces.isEmpty()) return notify("Herdr has no spaces yet.", NotificationType.INFORMATION)
         JBPopupFactory.getInstance().createPopupChooserBuilder(spaces)
             .setTitle("Switch to Herdr Space")
-            .setRenderer(com.intellij.ui.SimpleListCellRenderer.create("") { s: Space -> listOfNotNull(s.label, s.status?.name, s.cwd).joinToString("  ·  ") })
+            .setRenderer(object : com.intellij.ui.ColoredListCellRenderer<Space>() {
+                override fun customizeCellRenderer(list: javax.swing.JList<out Space>, value: Space?, index: Int, selected: Boolean, hasFocus: Boolean) {
+                    if (value == null) return
+                    append(value.label)
+                    listOfNotNull(value.status?.name, value.cwd).forEach { append("  ·  $it", com.intellij.ui.SimpleTextAttributes.GRAYED_ATTRIBUTES) }
+                }
+            })
             .setItemChosenCallback { switchTo(it) }
             .createPopup()
             .showCenteredInCurrentWindow(project)

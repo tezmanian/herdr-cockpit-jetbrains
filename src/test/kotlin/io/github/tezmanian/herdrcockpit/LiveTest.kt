@@ -22,7 +22,7 @@ class LiveTest {
 
         val ended = mutableListOf<String>()
         val tty = HerdrTtyConnector(findTool("herdr"), pane.id, herdrEnv(socket), "test") { ended += it }
-        assertTrue(tty.init(null))
+        tty.start()
         tty.resize(com.jediterm.core.util.TermSize(100, 30))
         val seen = StringBuilder()
         val reader = Thread {

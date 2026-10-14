@@ -1,0 +1,61 @@
+# Builds, tests and verifies the plugin. Runs on GitHub and on Gitea Actions (Gitea reads .github/workflows
+# when there is no .gitea/workflows). A tag v<version> also publishes a GitHub release with the plugin zip.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Test and build
+        run: ./gradlew test buildPlugin --console=plain
+      - uses: actions/upload-artifact@v7
+        with:
+          name: herdr-cockpit-plugin
+          path: build/distributions/*.zip
+          if-no-files-found: error
+
+  verify:
+    # Runs the JetBrains Plugin Verifier against PhpStorm (downloads each IDE, ~1 GB).
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Verify against PhpStorm
+        run: ./gradlew verifyPlugin --console=plain
+
+  release:
+    needs: [build, verify]
+    if: startsWith(github.ref, 'refs/tags/v') && github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: herdr-cockpit-plugin
+          path: dist
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
