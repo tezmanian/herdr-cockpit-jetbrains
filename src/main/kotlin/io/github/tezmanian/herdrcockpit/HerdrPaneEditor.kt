@@ -4,6 +4,7 @@
 package io.github.tezmanian.herdrcockpit
 
 import com.intellij.icons.AllIcons
+import com.intellij.ide.dnd.FileCopyPasteUtil
 import com.intellij.ide.FileIconProvider
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorPolicy
@@ -24,9 +25,11 @@ import com.jediterm.terminal.ProcessTtyConnector
 import com.pty4j.PtyProcessBuilder
 import com.pty4j.WinSize
 import java.awt.event.MouseWheelEvent
+import java.io.File
 import java.beans.PropertyChangeListener
 import javax.swing.Icon
 import javax.swing.JComponent
+import javax.swing.TransferHandler
 
 /** A pane's tab. Not a real file: the editor provider below draws it. */
 class HerdrPaneFile(val paneId: String, val spaceId: String, var title: String, val agent: Boolean) :
@@ -65,6 +68,35 @@ class HerdrPaneEditorProvider : FileEditorProvider, DumbAware {
 
 private const val WHEEL_LINES = 3
 
+/**
+ * Typed for dropped files, with a trailing space to keep typing: absolute paths, shell-quoted only when needed, or
+ * Claude Code's `@path` mentions (which attach the file's content) when `claude`.
+ */
+fun dropText(files: List<File>, claude: Boolean = false): String =
+    files.joinToString(" ", postfix = " ") { f ->
+        val path = f.absolutePath
+        val plain = !Regex("[^\\w@%+=:,./-]").containsMatchIn(path)
+        when {
+            claude -> if (plain) "@$path" else "@\"$path\""
+            plain -> path
+            else -> "'" + path.replace("'", "'\\''") + "'"
+        }
+    }
+
+/** Files dropped on the terminal (from the project view, the editor or Finder) are typed in as their paths. */
+private fun acceptFileDrops(widget: JBTerminalWidget, claude: () -> Boolean = { false }) {
+    widget.terminalPanel.transferHandler = object : TransferHandler() {
+        override fun canImport(support: TransferSupport) = FileCopyPasteUtil.isFileListFlavorAvailable(support.dataFlavors)
+        override fun importData(support: TransferSupport): Boolean {
+            val files = FileCopyPasteUtil.getFileList(support.transferable)?.takeIf { it.isNotEmpty() } ?: return false
+            val tty = widget.ttyConnector ?: return false
+            tty.write(dropText(files, claude()))
+            widget.terminalPanel.requestFocusInWindow()
+            return true
+        }
+    }
+}
+
 class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneFile) : UserDataHolderBase(), FileEditor {
     private val widget = JBTerminalWidget(project, JBTerminalSystemSettingsProviderBase(), this)
 
@@ -84,6 +116,7 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
             e.consume()
         }
         widget.start(connector)
+        acceptFileDrops(widget) { service.currentModel()?.find(file.paneId)?.second?.agentKind == "claude" }
     }
 
     override fun getComponent(): JComponent = widget
@@ -120,6 +153,7 @@ class HerdrTuiEditor(project: Project, private val file: HerdrTuiFile) : UserDat
             override fun getName() = "Herdr"
             override fun resize(termSize: TermSize) { if (proc.isAlive) proc.winSize = WinSize(termSize.columns, termSize.rows) }
         })
+        acceptFileDrops(widget)
     }
 
     override fun getComponent(): JComponent = widget

@@ -8,7 +8,7 @@ from that project unchanged (see `THIRD_PARTY_NOTICES.md`); `media/help.html` is
 
 The plugin is a **client of the Herdr server**. It never owns agent processes; Herdr does.
 
-## What works (MVP, v0.1.4)
+## What works (MVP, v0.1.5)
 
 - **Herdr tool window** (left side): spaces, agents and shells with status, "Needs you", shell activity
   (what's running / last command / last output), git line per space (branch, last commit, ahead/behind, changes).
@@ -17,6 +17,8 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 - **Switch a space** (click its header, or *Tools | Herdr | Switch Herdr Space…*): adds its folder as a content root
   of the project (never your home folder or a folder above the project; only roots the plugin added are ever removed), focuses it in Herdr, and opens every pane as an
   **editor tab** titled "space · pane" (for example "core2 · Claude"): agents most urgent first, then shells.
+- **Drop files on a pane's tab** (from the project view, an editor tab or Finder): their paths are typed in (as `@path`
+  for Claude Code, which attaches the file), so you can ask the agent about them.
 - **Pane tabs**: a JediTerm terminal fed by `herdr terminal session control <pane> --takeover`. Typing, colors,
   resize, selection and copy work; the mouse wheel scrolls Herdr's scrollback. Closing a tab only detaches; the
   program keeps running in Herdr.

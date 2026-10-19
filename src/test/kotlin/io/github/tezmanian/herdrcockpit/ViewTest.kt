@@ -120,6 +120,12 @@ class ViewTest {
     }
 
     @Test
+    fun droppedFilesAreTypedAsPaths() {
+        assertEquals("/x/a.php '/x/my file.txt' '/x/it'\\''s' ", dropText(listOf(java.io.File("/x/a.php"), java.io.File("/x/my file.txt"), java.io.File("/x/it's"))))
+        assertEquals("@/x/a.php @\"/x/my file.txt\" ", dropText(listOf(java.io.File("/x/a.php"), java.io.File("/x/my file.txt")), claude = true))
+    }
+
+    @Test
     fun refusesBroadMounts() {
         listOf("/", "/home/u", "/x", "/x/a").forEach { assertTrue(it, tooBroadToMount(it, "/home/u", "/x/a")) }
         listOf("/x/ab", "/x/a/sub", "/home/u/code").forEach { assertFalse(it, tooBroadToMount(it, "/home/u", "/x/a")) }
