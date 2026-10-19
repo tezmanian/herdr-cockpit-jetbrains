@@ -551,7 +551,7 @@ class HerdrService(private val project: Project) : Disposable {
         loop.execute {
             guard {
                 // Started by the TUI itself, the server would put its first space in $HOME.
-                if (startServer(binary(), herdrEnvNow(), serverLog()).ok) ensureProjectSpace()
+                if (startServer(binary(), herdrEnvNow(), serverLog()).ok) ensureProjectSpace(focus = true)
                 edt {
                     val fem = FileEditorManager.getInstance(project)
                     fem.openFile(tui?.takeIf { fem.isFileOpen(it) } ?: HerdrTuiFile().also { tui = it }, true)
@@ -565,11 +565,23 @@ class HerdrService(private val project: Project) : Disposable {
 
     private fun serverLog() = File(System.getProperty("user.home"), ".herdr-cockpit/herdr-server.log")
 
-    /** Herdr creates spaces without a cwd in $HOME, so a server with no spaces gets one for this project. */
-    private fun ensureProjectSpace() {
+    /**
+     * Herdr creates spaces without a cwd in $HOME, so a server with no spaces gets one for this project. With
+     * `focus` (the TUI shows Herdr's focused space), the project's space is created if missing and focused.
+     */
+    private fun ensureProjectSpace(focus: Boolean = false) {
         val base = project.basePath ?: return
-        runCatching { if (normalize(client.request("session.snapshot")).spaces.isEmpty()) actions.createSpace(base, null) }
-            .onFailure { log("couldn't create the project space: ${it.message}") }
+        runCatching {
+            val spaces = normalize(client.request("session.snapshot")).spaces
+            if (!focus) {
+                if (spaces.isEmpty()) actions.createSpace(base, null)
+                return@runCatching
+            }
+            // shortcut: matches on the first pane's current cwd, so a space whose shell left the project gets a twin; upgrade if that annoys
+            val id = projectSpace(spaces, base)?.id
+                ?: actions.createSpace(base, null).workspaceId ?: return@runCatching
+            actions.focusSpace(id)
+        }.onFailure { log("couldn't open the project space: ${it.message}") }
     }
 
     fun startHerdr() {

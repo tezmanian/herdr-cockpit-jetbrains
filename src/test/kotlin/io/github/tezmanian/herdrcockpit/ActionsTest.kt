@@ -116,6 +116,7 @@ class ActionsTest {
         actions.renameAgent("w1:p7", "reviewer")
         actions.closeSpace("w1")
         actions.closeSpace("w1", group = true)
+        actions.focusSpace("w1")
         actions.removeWorktree("w2", force = true)
         val sent = requests.map { it.str("method") to it.getAsJsonObject("params").toString() }
         assertEquals(
@@ -124,6 +125,7 @@ class ActionsTest {
                 "agent.rename" to """{"target":"w1:p7","name":"reviewer"}""",
                 "workspace.close" to """{"workspace_id":"w1"}""",
                 "workspace.close" to """{"workspace_id":"w1","close_group":true}""",
+                "workspace.focus" to """{"workspace_id":"w1"}""",
                 "worktree.remove" to """{"workspace_id":"w2","force":true}""",
             ),
             sent,

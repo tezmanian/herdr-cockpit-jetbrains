@@ -70,6 +70,11 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     fun createSpace(cwd: String, label: String?): Created =
         created(client.request("workspace.create", params("cwd" to cwd, "label" to label), 5000))
 
+    /** Focuses space `workspaceId` in Herdr's own view (what the TUI shows). */
+    fun focusSpace(workspaceId: String) {
+        client.request("workspace.focus", JsonObject().apply { addProperty("workspace_id", workspaceId) }, 5000)
+    }
+
     /**
      * New space on a new git worktree (and branch) of the repo of space `workspaceId`. Herdr takes the repo
      * from either workspace_id or cwd and refuses both ("only one of workspace_id or cwd may be supplied").

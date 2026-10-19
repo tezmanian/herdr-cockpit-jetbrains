@@ -74,6 +74,10 @@ data class Model(val spaces: List<Space>, val focusedSpaceId: String?, val versi
 
 fun rollup(ss: List<AgentStatus?>): AgentStatus? = ss.filterNotNull().maxByOrNull { it.priority }
 
+/** The space for project directory `base`: one rooted exactly there, else one in a subdirectory (nested projects). */
+fun projectSpace(spaces: List<Space>, base: String): Space? =
+    spaces.firstOrNull { it.cwd == base } ?: spaces.firstOrNull { it.cwd?.startsWith("$base/") == true }
+
 /** The panes to attach when switching to a space: agents most urgent first, then shells in tab order. */
 fun attachOrder(space: Space, withShells: Boolean): List<Pane> {
     val agents = space.agents.sortedBy { (it.status ?: AgentStatus.unknown).urgency }

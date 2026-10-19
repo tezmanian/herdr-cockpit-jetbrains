@@ -102,6 +102,16 @@ class ViewTest {
     }
 
     @Test
+    fun projectSpacePrefersExactDirectory() {
+        fun sp(id: String, cwd: String?) = Space(id, id, cwd, false, emptyMap(), false)
+        val spaces = listOf(sp("home", "/home/u"), sp("sub", "/x/a/sub"), sp("a", "/x/a"), sp("ab", "/x/ab"))
+        assertEquals("a", projectSpace(spaces, "/x/a")?.id)
+        assertEquals("sub", projectSpace(spaces, "/x/a/sub")?.id)
+        assertEquals("sub", projectSpace(spaces - spaces[2], "/x/a")?.id)
+        assertNull(projectSpace(spaces.take(1), "/x/a"))
+    }
+
+    @Test
     fun parsesGitStatus() {
         val g = parseStatus("## main...origin/main [ahead 1, behind 2]\nM  a.txt\n M b.txt\n?? c.txt\nUU d.txt\n")
         assertEquals(listOf("main", "origin/main", 1, 2, 1, 1, 1, 1, 4), listOf(g.branch, g.upstream, g.ahead, g.behind, g.staged, g.modified, g.untracked, g.conflicts, g.changes))
