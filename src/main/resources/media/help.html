@@ -186,7 +186,8 @@
   <h2>Create, rename and close</h2>
   <dl>
     <dt><span class="codicon codicon-add"></span> New space (next to "Spaces")</dt>
-    <dd>Pick <b>Choose a folder…</b>, or <b>New git worktree of</b> an existing space: a separate checkout on a new branch, so
+    <dd>Pick one of the window's projects (the project and the ones attached to it; several spaces per project are fine),
+      <b>Choose a folder…</b>, or <b>New git worktree of</b> an existing space: a separate checkout on a new branch, so
       an agent can work without touching your current branch (Herdr puts it in <code>~/.herdr/worktrees/&lt;repo&gt;/&lt;branch&gt;</code>).
       Then name it and choose what to start. The new pane opens as an editor tab right away.</dd>
     <dt><span class="codicon codicon-add"></span> New tab (bottom of a space card, or right-click a space)</dt>
@@ -307,7 +308,7 @@
   <ul>
     <li><b>Status bar</b> (bottom right): <b>⬢ 1 blocked · 2 done</b> while agents need you, else <b>⬢ Herdr</b>; <b>⬢ Herdr: disconnected</b> when Herdr isn't connected.
       Hover for the Herdr version and socket. Click it to jump to the agent that needs you (blocked first); with nothing waiting, it opens a menu with
-      Refresh, Start Herdr, Open Herdr TUI, Settings and Copy Diagnostics. Hide it with a right-click on the status bar.</li>
+      Refresh, Start Herdr, Stop Herdr (asks first: every agent and shell stops), Open Herdr TUI, Settings and Copy Diagnostics. Hide it with a right-click on the status bar.</li>
     <li><b>Badge</b>: a red dot on the Herdr tool window icon while an agent is blocked.</li>
     <li><b>Notifications</b> when an agent becomes blocked or done, with a <b>Show</b> button that opens it.</li>
   </ul>
@@ -341,7 +342,7 @@
   <table>
     <tr><th>The sidebar says</th><th>What to do</th></tr>
     <tr><td>Herdr isn't running</td><td><b>Start Herdr</b> starts the server in the background, with no window and with a terminal-like environment (the IDE's own variables aren't passed on to your panes). It keeps running after you quit the IDE,
-      so your agents keep running too; stop it with <code>herdr server stop</code>. <b>Open Herdr TUI</b> runs Herdr's full interface in an editor tab instead.</td></tr>
+      so your agents keep running too; stop it with <b>Stop Herdr</b> in the status bar menu or <code>herdr server stop</code>. <b>Open Herdr TUI</b> runs Herdr's full interface in an editor tab instead.</td></tr>
     <tr><td>Herdr stopped unexpectedly</td><td>It crashed and left its socket file behind. <b>Start Herdr</b> is safe: Herdr restores your spaces, tabs and folders.
       Agents with a Herdr integration (such as Claude Code) resume their sessions; others come back as shells.</td></tr>
     <tr><td>Herdr isn't installed</td><td><b>Install Herdr</b> opens herdr.dev. If it is installed somewhere unusual, set <b>herdr binary</b>.</td></tr>
@@ -379,6 +380,7 @@
     <tr><th>Setting</th><th>What it does</th></tr>
     <tr><td>herdr binary<div class="def">default: empty</div></td><td>Path to <code>herdr</code>. Empty: <code>~/.local/bin</code>, Homebrew, <code>/usr/bin</code> and the other usual folders, then PATH.</td></tr>
     <tr><td>Socket<div class="def">default: empty</div></td><td>Herdr's socket. Empty: <code>HERDR_SOCKET_PATH</code>, <code>HERDR_SESSION</code>, else <code>~/.config/herdr/herdr.sock</code>. A <code>…/sessions/&lt;name&gt;/herdr.sock</code> path selects that session.</td></tr>
+    <tr><td>Create a space for every project in the window<div class="def">default: off</div></td><td>Start Herdr and Open Herdr TUI create a space in the folder of each project (attached ones too) that has none yet. Spaces are never closed for you.</td></tr>
     <tr><td>Add the space's folder as a content root<div class="def">default: on</div></td><td>Switching a space adds its folder to the project; only roots the plugin added are ever removed.</td></tr>
     <tr><td>Open a tab for every pane<div class="def">default: on</div></td><td>Switching a space opens its panes as editor tabs.</td></tr>
     <tr><td>Include shell panes<div class="def">default: on</div></td><td>…shells too, not only agents.</td></tr>

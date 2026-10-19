@@ -41,6 +41,8 @@ class HerdrSettingsState : BaseState() {
     var agents by string("claude, codex, kiro, cursor")
     /** Closing a pane's editor tab yourself: "never" only detaches, "ask" closes idle shells in Herdr and asks for the rest, "always" closes it. */
     var closeTabInHerdr by string("never")
+    /** Starting Herdr or opening the TUI creates a space for every project of the window (attached ones too) that has none. */
+    var spacePerProject by property(false)
     /** Kiro's monthly credit allowance (Kiro doesn't store it locally); 0 = unknown, no bar. */
     var kiroMonthlyCredits by property(0)
 }
@@ -66,6 +68,10 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                     textField().bindText({ s.socketPath ?: "" }, { s.socketPath = it }).columns(COLUMNS_LARGE)
                         .comment("Empty: HERDR_SOCKET_PATH, HERDR_SESSION, else ~/.config/herdr/herdr.sock. A …/sessions/&lt;name&gt;/herdr.sock path selects that session.")
                 }
+            }
+            group("Starting Herdr") {
+                row { checkBox("Create a space for every project in the window").bindSelected(s::spacePerProject)
+                    .comment("When you start Herdr or open the TUI: the project and the ones attached to it, each in its folder, if it has no space yet. Spaces are never closed for you.") }
             }
             group("Switching spaces") {
                 row { checkBox("Add the space's folder as a content root").bindSelected(s::mountOnSwitch) }

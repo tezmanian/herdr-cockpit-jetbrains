@@ -30,6 +30,7 @@ import com.intellij.openapi.project.ProjectManagerListener
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
@@ -522,6 +523,7 @@ class HerdrService(private val project: Project) : Disposable {
             "refresh" -> { nextAttempt = 0; lastDiagnosis = 0; loop.execute { guard { refresh() } } }
             "toggleShellPanes" -> { settings.showShells = !settings.showShells; scheduleRender() }
             "startServer" -> startHerdr()
+            "stopServer" -> stopHerdr()
             "openInstallDocs" -> BrowserUtil.browse("https://herdr.dev")
             "openSettings" -> ShowSettingsUtil.getInstance().showSettingsDialog(project, HerdrConfigurable::class.java)
             "copyDiagnostics" -> copyDiagnostics()
@@ -565,23 +567,33 @@ class HerdrService(private val project: Project) : Disposable {
 
     private fun serverLog() = File(System.getProperty("user.home"), ".herdr-cockpit/herdr-server.log")
 
+    /** The folders of this window's projects: the project and the ones attached to it, not the plugin's own mounts. */
+    fun projectFolders(): List<String> {
+        val ours = mountedRoots()
+        val roots = ApplicationManager.getApplication().runReadAction<List<String>> {
+            ProjectRootManager.getInstance(project).contentRoots.filter { it.url !in ours }.map { it.path }
+        }
+        return (listOfNotNull(project.basePath) + roots).distinct()
+    }
+
     /**
-     * Herdr creates spaces without a cwd in $HOME, so a server with no spaces gets one for this project. With
-     * `focus` (the TUI shows Herdr's focused space), the project's space is created if missing and focused.
+     * Herdr creates spaces without a cwd in $HOME, so a server with no spaces gets one for this project, and with
+     * the setting every project folder of the window gets one. With `focus` (the TUI shows Herdr's focused
+     * space), the project's space is created if missing and focused. Never closes a space.
      */
     private fun ensureProjectSpace(focus: Boolean = false) {
         val base = project.basePath ?: return
         runCatching {
             val spaces = normalize(client.request("session.snapshot")).spaces
-            if (!focus) {
-                if (spaces.isEmpty()) actions.createSpace(base, null)
-                return@runCatching
-            }
+            val folders = if (settings.spacePerProject) projectFolders() else if (focus || spaces.isEmpty()) listOf(base) else emptyList()
             // shortcut: matches on the first pane's current cwd, so a space whose shell left the project gets a twin; upgrade if that annoys
-            val id = projectSpace(spaces, base)?.id
-                ?: actions.createSpace(base, null).workspaceId ?: return@runCatching
-            actions.focusSpace(id)
-        }.onFailure { log("couldn't open the project space: ${it.message}") }
+            var baseId = projectSpace(spaces, base)?.id
+            for (dir in folders) if (projectSpace(spaces, dir) == null) {
+                val id = actions.createSpace(dir, null).workspaceId
+                if (dir == base) baseId = id
+            }
+            if (focus) baseId?.let(actions::focusSpace)
+        }.onFailure { log("couldn't create the project spaces: ${it.message}") }
     }
 
     fun startHerdr() {
@@ -596,6 +608,20 @@ class HerdrService(private val project: Project) : Disposable {
                 nextAttempt = 0
                 lastDiagnosis = 0
                 if (!r.ok) notify("Couldn't start Herdr: ${r.error}", NotificationType.ERROR)
+                refresh()
+            }
+        }
+    }
+
+    /** `herdr server stop`, after asking: it ends every agent and shell, also those of other windows and terminals. */
+    fun stopHerdr() {
+        if (Messages.showOkCancelDialog(project, "Every agent and shell in Herdr stops, also in other IDE windows and terminals. The next start restores your spaces, tabs and folders.",
+                "Stop Herdr?", "Stop Herdr", "Cancel", Messages.getWarningIcon()) != Messages.OK) return
+        loop.execute {
+            guard {
+                val ok = runCommand(listOf(binary(), "server", "stop"), herdrEnvNow(), 15)?.first == 0
+                log(if (ok) "stopped herdr server" else "stop failed")
+                if (!ok) notify("Couldn't stop Herdr. Try <code>herdr server stop</code> in a terminal.", NotificationType.ERROR)
                 refresh()
             }
         }

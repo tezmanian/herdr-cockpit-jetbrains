@@ -90,13 +90,17 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         }
     }
 
-    /** New space: in a folder you pick, or on a new git worktree of an existing space's repository. */
+    /** New space: in one of the window's projects, a folder you pick, or on a new git worktree of an existing space's repository. */
     fun newSpace() {
         if (!connected()) return
         val spaces = service.currentModel()?.spaces ?: emptyList()
         val repos = spaces.mapNotNull { s -> service.branchOf(s.cwd)?.let { s to it } }
+        val home = System.getProperty("user.home")
         val items = buildList {
-            add(Item("Choose a folder…", AllIcons.Nodes.Folder) { newSpaceInFolder(spaces) })
+            service.projectFolders().forEachIndexed { i, dir ->
+                add(Item("${File(dir).name}  (${dir.replaceFirst(home, "~")})", AllIcons.Nodes.Module, if (i == 0) "Project" else null) { newSpaceIn(dir, File(dir).name) })
+            }
+            add(Item("Choose a folder…", AllIcons.Nodes.Folder, "Other") { newSpaceInFolder(spaces) })
             repos.forEachIndexed { i, (s, branch) ->
                 add(Item("${s.label}  (branch off $branch)", AllIcons.Vcs.Branch, if (i == 0) "New git worktree of" else null) { newWorktreeSpace(s, branch) })
             }
@@ -107,10 +111,12 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
     private fun newSpaceInFolder(spaces: List<Space>) {
         val near = project.basePath ?: spaces.firstNotNullOfOrNull { it.cwd }?.let { File(it).parent } ?: System.getProperty("user.home")
         val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle("New Space: Folder")
-        FileChooser.chooseFile(descriptor, project, LocalFileSystem.getInstance().findFileByPath(near)) { dir ->
-            val label = input("New space", "Space name:", dir.name) ?: return@chooseFile
-            pickWhat("Start in \"$label\"") { what -> createSpace(label, what) { actions.createSpace(dir.path, label) } }
-        }
+        FileChooser.chooseFile(descriptor, project, LocalFileSystem.getInstance().findFileByPath(near)) { dir -> newSpaceIn(dir.path, dir.name) }
+    }
+
+    private fun newSpaceIn(dir: String, name: String) {
+        val label = input("New space", "Space name:", name) ?: return
+        pickWhat("Start in \"$label\"") { what -> createSpace(label, what) { actions.createSpace(dir, label) } }
     }
 
     private fun newWorktreeSpace(from: Space, branch: String) {

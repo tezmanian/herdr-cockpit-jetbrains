@@ -8,7 +8,7 @@ from that project unchanged (see `THIRD_PARTY_NOTICES.md`); `media/help.html` is
 
 The plugin is a **client of the Herdr server**. It never owns agent processes; Herdr does.
 
-## What works (MVP, v0.1.2)
+## What works (MVP, v0.1.3)
 
 - **Herdr tool window** (right side): spaces, agents and shells with status, "Needs you", shell activity
   (what's running / last command / last output), git line per space (branch, last commit, ahead/behind, changes).
@@ -22,7 +22,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   program keeps running in Herdr.
 - Live updates via `events.subscribe` (re-snapshot on every event, 5 s safety poll), notifications when an agent is
   blocked or done, follow mode (Herdr's focus moves → the IDE follows, in projects you switched from the IDE).
-- **New space** (`+` next to "Spaces"): in a folder you pick, or on a new git worktree (and branch) of an existing
+- **New space** (`+` next to "Spaces"): in one of the window's projects (attached ones too), a folder you pick, or on a new git worktree (and branch) of an existing
   space's repository. **New tab** (in every space): a shell, a named shell, or an agent (your favorites first, the
   rest under "More agents…"). The new pane opens as an editor tab right away; an agent is started in it in the
   background. Herdr's own focus doesn't jump (`focus:false`).
@@ -39,9 +39,11 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   `codex app-server`, at most every 5 minutes, else its session logs), Kiro (credits this month/today; the allowance
   is the setting "Kiro monthly credits"). Nothing leaves the machine.
 - **Open Herdr TUI** (disconnected screens, *Tools | Herdr*): `herdr` in an editor tab (a real PTY), against the same
-  session as the plugin. Closing the tab ends only that client.
-- **Status bar** "⬢ 1 blocked · 2 done" (click: jump to that agent; otherwise a menu with Refresh, Start Herdr, Open
-  Herdr TUI, Settings, Copy Diagnostics) and a red badge on the tool window icon while an agent is blocked.
+  session as the plugin, showing the project's space (created if missing). Closing the tab ends only that client.
+  Optionally, Start Herdr and Open Herdr TUI create a space for every project in the window (setting "Create a space
+  for every project in the window"); spaces are never closed for you.
+- **Status bar** "⬢ 1 blocked · 2 done" (click: jump to that agent; otherwise a menu with Refresh, Start Herdr, Stop Herdr
+  (asks first), Open Herdr TUI, Settings, Copy Diagnostics) and a red badge on the tool window icon while an agent is blocked.
 - **Help** (`?` in the tool window's title bar, "Help" on the disconnected screens): "How to read the Herdr sidebar"
   in an editor tab, adapted from the VS Code extension's help page.
 - **From Herdr to the IDE** with the Herdr plugin in `herdr-plugin/` (`herdr plugin install tezmanian/herdr-cockpit/herdr-plugin`):
@@ -52,7 +54,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   one started last gets the links.
 - Optional: closing a pane's editor tab yourself also closes it in Herdr (setting "Closing a pane's tab yourself":
   never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
-- Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, switching behaviour, notifications, agents offered
+- Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, a space per project, switching behaviour, notifications, agents offered
   for new tabs, closing tabs, Kiro monthly credits).
 
 ## Not ported

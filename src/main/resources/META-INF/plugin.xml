@@ -9,6 +9,8 @@
     <a href="https://github.com/sriharirao92/vscode-herdr-cockpit">Herdr Cockpit for VS Code</a>.
     ]]></description>
     <depends>com.intellij.modules.platform</depends>
+    <!-- 2026.2 moved JCEF (the sidebar) into its own plugin; without this the class loader cannot see JBCefApp. -->
+    <depends>com.intellij.modules.jcef</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Herdr" anchor="right" icon="/icons/herdr.svg"
