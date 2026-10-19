@@ -22,7 +22,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 - **Drop files on a pane's tab** (from the project view, an editor tab or Finder): their paths are typed in (as `@path`
   for Claude Code, which attaches the file), so you can ask the agent about them.
 - **Pane tabs**: a JediTerm terminal fed by `herdr terminal session control <pane> --takeover`. Typing, colors,
-  resize, selection and copy work; the mouse wheel scrolls Herdr's scrollback. Closing a tab only detaches; the
+  resize, selection and copy work; the mouse wheel, Shift+PageUp/PageDown and Ctrl/Cmd+Home/End scroll Herdr's scrollback. Closing a tab only detaches; the
   program keeps running in Herdr.
 - Live updates via `events.subscribe` (re-snapshot on every event, 5 s safety poll), notifications when an agent is
   blocked or done, follow mode (Herdr's focus moves → the IDE follows, in projects you switched from the IDE).

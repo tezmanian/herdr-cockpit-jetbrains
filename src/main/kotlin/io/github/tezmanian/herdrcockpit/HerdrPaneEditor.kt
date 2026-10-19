@@ -17,13 +17,19 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Iconable
 import com.intellij.openapi.util.UserDataHolderBase
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.terminal.JBTerminalPanel
 import com.intellij.terminal.JBTerminalSystemSettingsProviderBase
 import com.intellij.terminal.JBTerminalWidget
 import com.intellij.testFramework.LightVirtualFile
 import com.jediterm.core.util.TermSize
 import com.jediterm.terminal.ProcessTtyConnector
+import com.jediterm.terminal.model.StyleState
+import com.jediterm.terminal.model.TerminalTextBuffer
+import com.jediterm.terminal.ui.settings.SettingsProvider
 import com.pty4j.PtyProcessBuilder
 import com.pty4j.WinSize
+import java.awt.event.InputEvent
+import java.awt.event.KeyEvent
 import java.awt.event.MouseWheelEvent
 import java.io.File
 import java.beans.PropertyChangeListener
@@ -97,8 +103,37 @@ private fun acceptFileDrops(widget: JBTerminalWidget, claude: () -> Boolean = { 
     }
 }
 
+/** A terminal whose panel offers each key press to [tabKey] first; true means the tab handled it and the pane never sees it. */
+class HerdrTerminalWidget(project: Project, parent: com.intellij.openapi.Disposable, private val tabKey: (KeyEvent) -> Boolean) :
+    JBTerminalWidget(project, JBTerminalSystemSettingsProviderBase(), parent) {
+    override fun createTerminalPanel(settings: SettingsProvider, styleState: StyleState, textBuffer: TerminalTextBuffer): JBTerminalPanel =
+        object : JBTerminalPanel(settings as JBTerminalSystemSettingsProviderBase, textBuffer, styleState) {
+            override fun handleKeyEvent(e: KeyEvent) {
+                if (e.id == KeyEvent.KEY_PRESSED && tabKey(e)) e.consume() else super.handleKeyEvent(e)
+            }
+        }
+}
+
+/** Herdr's scrollback keys: Shift+PageUp/PageDown a page, Ctrl/Cmd+Home/End to the top or bottom. Null: not ours. */
+fun scrollKey(code: Int, modifiers: Int, rows: Int): Pair<Boolean, Int>? {
+    val shift = modifiers and InputEvent.SHIFT_DOWN_MASK != 0
+    val jump = modifiers and (InputEvent.CTRL_DOWN_MASK or InputEvent.META_DOWN_MASK) != 0 && !shift
+    val all = 65535
+    return when {
+        shift && code == KeyEvent.VK_PAGE_UP -> true to maxOf(1, rows - 1)
+        shift && code == KeyEvent.VK_PAGE_DOWN -> false to maxOf(1, rows - 1)
+        jump && code == KeyEvent.VK_HOME -> true to all
+        jump && code == KeyEvent.VK_END -> false to all
+        else -> null
+    }
+}
+
 class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneFile) : UserDataHolderBase(), FileEditor {
-    private val widget = JBTerminalWidget(project, JBTerminalSystemSettingsProviderBase(), this)
+    private val widget: HerdrTerminalWidget = HerdrTerminalWidget(project, this) { e ->
+        val (up, lines) = scrollKey(e.keyCode, e.modifiersEx, widget.terminalTextBuffer.height) ?: return@HerdrTerminalWidget false
+        file.connector?.scroll(up, lines)
+        true
+    }
 
     init {
         val service = HerdrService.getInstance(project)

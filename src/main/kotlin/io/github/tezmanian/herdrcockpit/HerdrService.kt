@@ -9,7 +9,7 @@ import com.google.gson.JsonObject
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.projectView.ProjectView
 import com.intellij.ide.trustedProjects.TrustedProjects
-import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.ide.plugins.cl.PluginAwareClassLoader
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
@@ -22,7 +22,6 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -49,7 +48,7 @@ private const val MANAGED_KEY = "herdr.cockpit.managed"
 private const val MOUNTED_KEY = "herdr.cockpit.mountedRoots"
 private const val ACTIVITY_KEY = "herdr.cockpit.spaceActivity"
 private val PLUGIN_VERSION: String by lazy {
-    PluginManagerCore.getPlugin(PluginId.getId("io.github.tezmanian.herdrcockpit"))?.version ?: "?"
+    (HerdrService::class.java.classLoader as? PluginAwareClassLoader)?.pluginDescriptor?.version ?: "?"
 }
 
 @Service(Service.Level.PROJECT)

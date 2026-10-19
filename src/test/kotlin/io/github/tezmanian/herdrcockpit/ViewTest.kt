@@ -136,6 +136,19 @@ class ViewTest {
     }
 
     @Test
+    fun scrollKeys() {
+        val (shift, ctrl, meta) = listOf(java.awt.event.InputEvent.SHIFT_DOWN_MASK, java.awt.event.InputEvent.CTRL_DOWN_MASK, java.awt.event.InputEvent.META_DOWN_MASK)
+        val k = java.awt.event.KeyEvent::class.java
+        fun key(n: String) = k.getField("VK_$n").getInt(null)
+        assertEquals(true to 31, scrollKey(key("PAGE_UP"), shift, 32))
+        assertEquals(false to 31, scrollKey(key("PAGE_DOWN"), shift, 32))
+        assertEquals(true to 65535, scrollKey(key("HOME"), ctrl, 32))
+        assertEquals(false to 65535, scrollKey(key("END"), meta, 32))
+        assertNull("plain PageUp goes to the program", scrollKey(key("PAGE_UP"), 0, 32))
+        assertNull(scrollKey(key("HOME"), 0, 32))
+    }
+
+    @Test
     fun refusesBroadMounts() {
         listOf("/", "/home/u", "/x", "/x/a").forEach { assertTrue(it, tooBroadToMount(it, "/home/u", "/x/a")) }
         listOf("/x/ab", "/x/a/sub", "/home/u/code").forEach { assertFalse(it, tooBroadToMount(it, "/home/u", "/x/a")) }
