@@ -547,13 +547,29 @@ class HerdrService(private val project: Project) : Disposable {
 
     /** The Herdr TUI in an editor tab; it may start the server, so re-check the connection shortly after. */
     fun openTui() {
-        val fem = FileEditorManager.getInstance(project)
-        val f = tui?.takeIf { fem.isFileOpen(it) } ?: HerdrTuiFile().also { tui = it }
         if (!binaryFound(binary())) return notify("Herdr isn't installed (${binary()}).", NotificationType.WARNING)
-        fem.openFile(f, true)
-        nextAttempt = 0
-        lastDiagnosis = 0
-        loop.schedule({ guard { refresh() } }, 1500, TimeUnit.MILLISECONDS)
+        loop.execute {
+            guard {
+                // Started by the TUI itself, the server would put its first space in $HOME.
+                if (startServer(binary(), herdrEnvNow(), serverLog()).ok) ensureProjectSpace()
+                edt {
+                    val fem = FileEditorManager.getInstance(project)
+                    fem.openFile(tui?.takeIf { fem.isFileOpen(it) } ?: HerdrTuiFile().also { tui = it }, true)
+                }
+                nextAttempt = 0
+                lastDiagnosis = 0
+                loop.schedule({ guard { refresh() } }, 1500, TimeUnit.MILLISECONDS)
+            }
+        }
+    }
+
+    private fun serverLog() = File(System.getProperty("user.home"), ".herdr-cockpit/herdr-server.log")
+
+    /** Herdr creates spaces without a cwd in $HOME, so a server with no spaces gets one for this project. */
+    private fun ensureProjectSpace() {
+        val base = project.basePath ?: return
+        runCatching { if (normalize(client.request("session.snapshot")).spaces.isEmpty()) actions.createSpace(base, null) }
+            .onFailure { log("couldn't create the project space: ${it.message}") }
     }
 
     fun startHerdr() {
@@ -561,9 +577,9 @@ class HerdrService(private val project: Project) : Disposable {
         scheduleRender()
         loop.execute {
             guard {
-                val logFile = File(System.getProperty("user.home"), ".herdr-cockpit/herdr-server.log")
-                val r = startServer(binary(), herdrEnvNow(), logFile)
+                val r = startServer(binary(), herdrEnvNow(), serverLog())
                 log(if (r.ok) (if (r.already) "herdr was already running" else "started herdr server") else "start failed: ${r.error}")
+                if (r.ok) ensureProjectSpace()
                 conn = Conn.Connecting
                 nextAttempt = 0
                 lastDiagnosis = 0

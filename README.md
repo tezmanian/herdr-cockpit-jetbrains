@@ -8,7 +8,7 @@ from that project unchanged (see `THIRD_PARTY_NOTICES.md`); `media/help.html` is
 
 The plugin is a **client of the Herdr server**. It never owns agent processes; Herdr does.
 
-## What works (MVP, v0.1.0)
+## What works (MVP, v0.2.0)
 
 - **Herdr tool window** (right side): spaces, agents and shells with status, "Needs you", shell activity
   (what's running / last command / last output), git line per space (branch, last commit, ahead/behind, changes).
