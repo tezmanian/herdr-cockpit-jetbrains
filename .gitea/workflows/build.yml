@@ -24,10 +24,13 @@ jobs:
           restore-keys: gradle-
       - name: Test and build
         run: ./gradlew test buildPlugin --console=plain
+      # Gitea zips the artifact on download, so upload the unpacked plugin: the download is then the installable zip
+      - name: Unpack plugin
+        run: mkdir build/artifact && cd build/artifact && jar xf ../distributions/*.zip
       - uses: actions/upload-artifact@v3  # v4 needs the GitHub artifact service; Gitea speaks v3
         with:
           name: herdr-cockpit-plugin
-          path: build/distributions/*.zip
+          path: build/artifact
           if-no-files-found: error
 
   verify:
