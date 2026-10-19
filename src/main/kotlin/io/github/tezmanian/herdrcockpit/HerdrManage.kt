@@ -105,7 +105,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
     }
 
     private fun newSpaceInFolder(spaces: List<Space>) {
-        val near = spaces.firstNotNullOfOrNull { it.cwd }?.let { File(it).parent } ?: System.getProperty("user.home")
+        val near = project.basePath ?: spaces.firstNotNullOfOrNull { it.cwd }?.let { File(it).parent } ?: System.getProperty("user.home")
         val descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor().withTitle("New Space: Folder")
         FileChooser.chooseFile(descriptor, project, LocalFileSystem.getInstance().findFileByPath(near)) { dir ->
             val label = input("New space", "Space name:", dir.name) ?: return@chooseFile
