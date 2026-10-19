@@ -8,7 +8,7 @@ from that project unchanged (see `THIRD_PARTY_NOTICES.md`); `media/help.html` is
 
 The plugin is a **client of the Herdr server**. It never owns agent processes; Herdr does.
 
-## What works (MVP, v0.1.5)
+## What works (MVP, v0.1.6)
 
 - **Herdr tool window** (left side): spaces, agents and shells with status, "Needs you", shell activity
   (what's running / last command / last output), git line per space (branch, last commit, ahead/behind, changes).
@@ -45,7 +45,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   Optionally, Start Herdr and Open Herdr TUI create a space for every project in the window (setting "Create a space
   for every project in the window"); spaces are never closed for you.
 - **Status bar** "⬢ 1 blocked · 2 done" (click: jump to that agent; otherwise a menu with Refresh, Start Herdr, Stop Herdr
-  (asks first), Open Herdr TUI, Settings, Copy Diagnostics) and a red badge on the tool window icon while an agent is blocked.
+  (asks first), Settings, Copy Diagnostics) and a red badge on the tool window icon while an agent is blocked.
 - **Help** (`?` in the tool window's title bar, "Help" on the disconnected screens): "How to read the Herdr sidebar"
   in an editor tab, adapted from the VS Code extension's help page.
 - **From Herdr to the IDE** with the Herdr plugin in `herdr-plugin/` (`herdr plugin install tezmanian/herdr-cockpit/herdr-plugin`):

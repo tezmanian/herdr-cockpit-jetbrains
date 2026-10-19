@@ -63,7 +63,7 @@ private class HerdrStatusWidget(private val project: Project) : StatusBarWidget,
         if (service.isConnected() && b + d > 0) return@Consumer service.handle("attention", null, null)
         fun act(text: String, command: String) = DumbAwareAction.create(text) { service.handle(command, null, null) }
         val group: ActionGroup = DefaultActionGroup(
-            RefreshAction(), act("Start Herdr", "startServer"), act("Stop Herdr", "stopServer"), OpenTuiAction(), OpenSettingsAction(), act("Copy Diagnostics", "copyDiagnostics"),
+            RefreshAction(), act("Start Herdr", "startServer"), act("Stop Herdr", "stopServer"), OpenSettingsAction(), act("Copy Diagnostics", "copyDiagnostics"),
         )
         JBPopupFactory.getInstance()
             .createActionGroupPopup("Herdr", group, SimpleDataContext.getProjectContext(project), JBPopupFactory.ActionSelectionAid.SPEEDSEARCH, false)
