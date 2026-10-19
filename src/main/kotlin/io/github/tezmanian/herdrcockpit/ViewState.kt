@@ -25,6 +25,9 @@ private fun tilde(p: String?) = if (p != null && (p == home || p.startsWith("$ho
  * The pane's name in the sidebar and on its editor tab (they must match). Agents: Herdr's display name,
  * else the agent kind ("Claude", "Claude 2"). Shells: the pane label, else the tab label, else "Tab N".
  */
+/** Editor tab title: which space, then the pane's name as the sidebar shows it. */
+fun editorTitle(space: Space, tab: Tab?, p: Pane) = "${space.label} · ${paneName(tab, p)}"
+
 fun paneName(tab: Tab?, p: Pane): String {
     if (p.isAgent) {
         p.displayAgent?.let { return it }

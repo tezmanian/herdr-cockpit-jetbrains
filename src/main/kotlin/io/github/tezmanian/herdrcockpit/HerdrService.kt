@@ -254,9 +254,9 @@ class HerdrService(private val project: Project) : Disposable {
     private fun apply(next: Model) {
         val prev = model
         model = next
-        // Renamed in Herdr: rename its tab here too.
+        // Renamed in Herdr (space or pane): rename its tab here too.
         for (sp in next.spaces) for (tab in sp.tabs) for (p in tab.panes) {
-            val n = paneName(tab, p)
+            val n = editorTitle(sp, tab, p)
             val was = paneNames[p.id]
             if (was != null && was != n) files[p.id]?.let { f -> f.title = n; edt { FileEditorManagerEx.getInstanceEx(project).updateFilePresentation(f) } }
             paneNames[p.id] = n
@@ -424,6 +424,8 @@ class HerdrService(private val project: Project) : Disposable {
     private fun mount(space: Space): Boolean {
         val cwd = space.cwd ?: return false.also { notify("No working directory known for space \"${space.label}\".", NotificationType.WARNING) }
         if (isMounted(space)) return true
+        if (tooBroadToMount(cwd, System.getProperty("user.home"), project.basePath))
+            return false.also { notify("Not adding $cwd to the project: it is your home folder or contains the project.", NotificationType.WARNING) }
         val module = ModuleManager.getInstance(project).modules.firstOrNull()
             ?: return false.also { notify("This project has no module to add ${space.label}'s folder to.", NotificationType.WARNING) }
         val dir = LocalFileSystem.getInstance().findFileByPath(cwd) ?: run {
@@ -503,7 +505,7 @@ class HerdrService(private val project: Project) : Disposable {
             f = null
         }
         if (f == null) {
-            f = HerdrPaneFile(pane.id, space.id, paneName(space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.isAgent)
+            f = HerdrPaneFile(pane.id, space.id, editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.isAgent)
             files[pane.id] = f
         }
         fem.openFile(f, focus)

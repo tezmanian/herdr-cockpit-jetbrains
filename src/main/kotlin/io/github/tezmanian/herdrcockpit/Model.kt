@@ -75,6 +75,10 @@ data class Model(val spaces: List<Space>, val focusedSpaceId: String?, val versi
 fun rollup(ss: List<AgentStatus?>): AgentStatus? = ss.filterNotNull().maxByOrNull { it.priority }
 
 /** The space for project directory `base`: one rooted exactly there, else one in a subdirectory (nested projects). */
+/** The home folder, "/" or a folder above the project: mounting it would pull all of it into the index. */
+fun tooBroadToMount(cwd: String, home: String, base: String?): Boolean =
+    cwd == "/" || cwd == home || (base != null && (base == cwd || base.startsWith("$cwd/")))
+
 fun projectSpace(spaces: List<Space>, base: String): Space? =
     spaces.firstOrNull { it.cwd == base } ?: spaces.firstOrNull { it.cwd?.startsWith("$base/") == true }
 

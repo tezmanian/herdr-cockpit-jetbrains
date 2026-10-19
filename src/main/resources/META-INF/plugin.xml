@@ -13,7 +13,7 @@
     <depends>com.intellij.modules.jcef</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow id="Herdr" anchor="right" icon="/icons/herdr.svg"
+        <toolWindow id="Herdr" anchor="left" icon="/icons/herdr.svg"
                     factoryClass="io.github.tezmanian.herdrcockpit.HerdrToolWindowFactory"/>
         <fileEditorProvider implementation="io.github.tezmanian.herdrcockpit.HerdrPaneEditorProvider"/>
         <editorTabTitleProvider implementation="io.github.tezmanian.herdrcockpit.HerdrPaneTabTitleProvider"/>

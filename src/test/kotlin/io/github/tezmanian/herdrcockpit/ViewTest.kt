@@ -5,6 +5,7 @@ package io.github.tezmanian.herdrcockpit
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -109,6 +110,19 @@ class ViewTest {
         assertEquals("sub", projectSpace(spaces, "/x/a/sub")?.id)
         assertEquals("sub", projectSpace(spaces - spaces[2], "/x/a")?.id)
         assertNull(projectSpace(spaces.take(1), "/x/a"))
+    }
+
+    @Test
+    fun editorTitleIsSpaceThenPane() {
+        val w5 = fixture().space("w5")!!
+        val p3 = w5.panes.first { it.id == "w5:p3" }
+        assertEquals("${w5.label} · Tab 3", editorTitle(w5, w5.tabs.first { it.id == p3.tabId }, p3))
+    }
+
+    @Test
+    fun refusesBroadMounts() {
+        listOf("/", "/home/u", "/x", "/x/a").forEach { assertTrue(it, tooBroadToMount(it, "/home/u", "/x/a")) }
+        listOf("/x/ab", "/x/a/sub", "/home/u/code").forEach { assertFalse(it, tooBroadToMount(it, "/home/u", "/x/a")) }
     }
 
     @Test
