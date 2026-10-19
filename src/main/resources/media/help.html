@@ -128,7 +128,8 @@
 
 <section id="spaces">
   <h2>Spaces</h2>
-  <p>Each Herdr space is a card.</p>
+  <p>Each Herdr space is a card. Spaces with an agent working or waiting on you come first, then the most recently active
+    (an agent changed state, or you switched to it); see <i>Order of spaces</i> in the settings. The plugin's and Herdr's versions are at the bottom of the sidebar.</p>
   <div class="demo">
     <section class="space st-working open herdr-focused">
       <div class="space-head"><span class="chev"><span class="codicon codicon-chevron-down"></span></span><span class="space-name">api-service</span></div>
@@ -387,6 +388,7 @@
     <tr><td>Include shell panes<div class="def">default: on</div></td><td>…shells too, not only agents.</td></tr>
     <tr><td>Close the tabs of other spaces<div class="def">default: on</div></td><td>Switching a space closes the other spaces' tabs (they only detach).</td></tr>
     <tr><td>Follow Herdr's focus<div class="def">default: on</div></td><td>See <a href="#follow">Follow mode</a>.</td></tr>
+    <tr><td>Order of spaces<div class="def">default: activity</div></td><td><b>activity</b>: spaces with an agent working or waiting on you first, then the most recently active. <b>herdr</b>: Herdr's order.</td></tr>
     <tr><td>Show shell panes<div class="def">default: on</div></td><td>Shell rows in the sidebar (also the <span class="codicon codicon-terminal"></span> toggle).</td></tr>
     <tr><td>Notify when an agent is blocked / done<div class="def">default: on / on</div></td><td>Notifications on these transitions.</td></tr>
     <tr><td>Kiro monthly credits<div class="def">default: 0</div></td><td>Your Kiro plan's allowance; 0 hides the bar.</td></tr>

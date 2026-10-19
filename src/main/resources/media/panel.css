@@ -392,3 +392,6 @@ button.stat:hover { background: color-mix(in srgb, var(--c) 26%, transparent); }
 @media (prefers-reduced-motion: reduce) {
   *, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Versions, at the bottom of the sidebar. */
+.versions { color: var(--muted); font-size: 11px; text-align: center; padding: 14px 0 8px; opacity: 0.8; user-select: text; }

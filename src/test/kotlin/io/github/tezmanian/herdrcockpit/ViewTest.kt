@@ -126,6 +126,16 @@ class ViewTest {
     }
 
     @Test
+    fun spaceOrderBusyThenRecentThenHerdr() {
+        fun sp(id: String, vararg st: AgentStatus) = Space(id, id, null, false, emptyMap(), false).also { space ->
+            space.tabs += Tab("$id:t", id, "1", st.mapIndexed { n, x -> fixture().spaces.flatMap { it.agents }.first().copy(id = "$id:p$n", status = x) }.toMutableList())
+        }
+        val at = mapOf("a" to 5L, "b" to 9L, "c" to 1L, "d" to 3L)
+        val ordered = orderByActivity(listOf(sp("a", AgentStatus.idle), sp("b"), sp("c", AgentStatus.working), sp("d", AgentStatus.blocked, AgentStatus.idle), sp("e", AgentStatus.done), sp("f")), { at[it.id] })
+        assertEquals(listOf("d", "c", "b", "a", "e", "f"), ordered.map { it.id })
+    }
+
+    @Test
     fun refusesBroadMounts() {
         listOf("/", "/home/u", "/x", "/x/a").forEach { assertTrue(it, tooBroadToMount(it, "/home/u", "/x/a")) }
         listOf("/x/ab", "/x/a/sub", "/home/u/code").forEach { assertFalse(it, tooBroadToMount(it, "/home/u", "/x/a")) }

@@ -34,6 +34,8 @@ class HerdrSettingsState : BaseState() {
     var closeTerminalsOnSwitch by property(true)
     /** Switching a space adds its folder as a content root of this project. */
     var mountOnSwitch by property(true)
+    /** Sidebar order: "activity" (busy and recently active spaces first) or "herdr" (Herdr's order). */
+    var spaceOrder by string("activity")
     var showShells by property(true)
     var notifyBlocked by property(true)
     var notifyDone by property(true)
@@ -81,6 +83,10 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row { checkBox("Follow Herdr's focus (in projects you switched from the IDE)").bindSelected(s::followMode) }
             }
             group("Sidebar and notifications") {
+                row("Order of spaces:") {
+                    comboBox(listOf("activity", "herdr")).bindItem({ s.spaceOrder ?: "activity" }, { s.spaceOrder = it ?: "activity" })
+                        .comment("activity: spaces with an agent working or waiting on you first, then the most recently active (an agent changed state, or you switched to it). herdr: Herdr's order.")
+                }
                 row { checkBox("Show shell panes").bindSelected(s::showShells) }
                 row { checkBox("Notify when an agent is blocked").bindSelected(s::notifyBlocked) }
                 row { checkBox("Notify when an agent is done").bindSelected(s::notifyDone) }

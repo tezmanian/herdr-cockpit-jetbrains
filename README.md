@@ -12,6 +12,8 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 
 - **Herdr tool window** (left side): spaces, agents and shells with status, "Needs you", shell activity
   (what's running / last command / last output), git line per space (branch, last commit, ahead/behind, changes).
+  Spaces with an agent working or waiting on you come first, then the most recently active (setting "Order of
+  spaces"). The plugin's and Herdr's versions are at the bottom.
   Disconnected screens explain why (not installed / not running / crashed / incompatible / unreachable) and can
   start the server.
 - **Switch a space** (click its header, or *Tools | Herdr | Switch Herdr Space…*): adds its folder as a content root
@@ -56,7 +58,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   one started last gets the links.
 - Optional: closing a pane's editor tab yourself also closes it in Herdr (setting "Closing a pane's tab yourself":
   never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
-- Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, a space per project, switching behaviour, notifications, agents offered
+- Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, a space per project, switching behaviour, space order, notifications, agents offered
   for new tabs, closing tabs, Kiro monthly credits).
 
 ## Not ported

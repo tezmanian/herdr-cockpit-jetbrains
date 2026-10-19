@@ -70,7 +70,20 @@ data class ViewInputs(
     val connection: JsonObject,
     /** Plan usage (Usage.kt); only the agents running in Herdr right now are shown. */
     val usage: JsonArray = JsonArray(),
+    /** "activity": busy and recently active spaces first (orderByActivity); "herdr": Herdr's order. */
+    val order: String = "herdr",
+    /** When a space was last active (an agent changed state, it was focused), if known. */
+    val lastActive: (Space) -> Long? = { null },
+    /** {cockpit, herdr?}: shown at the bottom of the sidebar. */
+    val versions: JsonObject? = null,
 )
+
+/** Spaces with an agent working or waiting on you first, then the most recently active; ties keep Herdr's order. */
+fun orderByActivity(spaces: List<Space>, lastActive: (Space) -> Long?): List<Space> =
+    spaces.sortedWith(
+        compareByDescending<Space> { s -> s.agents.any { it.status == AgentStatus.working || it.status == AgentStatus.blocked } }
+            .thenByDescending { lastActive(it) ?: 0L },
+    )
 
 private fun strings(xs: List<String>) = JsonArray().apply { xs.forEach { add(it) } }
 
@@ -151,7 +164,8 @@ fun buildViewState(i: ViewInputs): JsonObject {
     var shellCount = 0
     val attention = mutableListOf<JsonObject>()
     val spaces = JsonArray()
-    for (sp in i.model?.spaces ?: emptyList()) {
+    val all = i.model?.spaces ?: emptyList()
+    for (sp in if (i.order == "herdr") all else orderByActivity(all, i.lastActive)) {
         val agents = JsonArray()
         val shells = JsonArray()
         for (tab in sp.tabs) for (p in tab.panes) {
@@ -192,5 +206,6 @@ fun buildViewState(i: ViewInputs): JsonObject {
         add("spaces", spaces)
         val running = i.model?.spaces?.flatMap { sp -> sp.agents.mapNotNull { it.agentKind?.lowercase() } }.orEmpty().toSet()
         add("usage", JsonArray().apply { i.usage.filter { it.asJsonObject.get("id").asString in running }.forEach { add(it) } })
+        i.versions?.let { add("versions", it) }
     }
 }

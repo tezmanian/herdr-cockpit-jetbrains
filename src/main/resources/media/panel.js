@@ -316,6 +316,13 @@
   }
 
   /** Herdr isn't connected: say why and offer the right next step (reasons from src/connection.ts). */
+  /** Herdr Cockpit's version, and Herdr's while connected. */
+  function versions() {
+    const v = state.versions;
+    if (!v) return '';
+    return `<div class="versions">Herdr Cockpit v${esc(v.cockpit)}${v.herdr ? ` · Herdr ${esc(v.herdr)}` : ''}</div>`;
+  }
+
   function disconnected() {
     const c = state.connection || { kind: 'connecting' };
     const b = (/** @type {string} */ act, /** @type {string} */ label, primary = false) =>
@@ -385,7 +392,7 @@
     liveUntil = Infinity;
     const focusKey = /** @type {HTMLElement|null} */ (document.activeElement)?.closest?.('[data-key]')?.getAttribute('data-key');
     if (!state.connected) {
-      app.innerHTML = disconnected();
+      app.innerHTML = disconnected() + versions();
       return;
     }
     const where = (/** @type {any} */ a) => state.spaces.find((/** @type {any} */ s) => s.id === a.spaceId)?.label;
@@ -398,7 +405,7 @@
       : `<div class="splash"><div class="big">${icon('layers')}</div><h2>No spaces yet</h2><p>A space is a folder with its agents and shells.</p><div class="btns"><button class="btn" data-act="newSpace">New space</button></div></div>`;
     const spacesLabel = `<div class="section-label">Spaces<button class="icon-btn label-btn" data-act="newSpace" title="New space: a folder or a new git worktree" aria-label="New space">${icon('add')}</button></div>`;
     const stale = state.connection && state.connection.kind === 'reconnecting';
-    app.innerHTML = `${header()}${banner()}<div class="${stale ? 'stale' : ''}">${usageSection()}${attention}${spacesLabel}<div class="spaces">${spaces}</div></div>`;
+    app.innerHTML = `${header()}${banner()}<div class="${stale ? 'stale' : ''}">${usageSection()}${attention}${spacesLabel}<div class="spaces">${spaces}</div></div>${versions()}`;
     for (const n of /** @type {NodeListOf<HTMLElement>} */ (app.querySelectorAll('.fill[data-pct]'))) n.style.width = `${n.dataset.pct}%`;
     // Re-rendering restarts CSS animations; offset them by wall-clock so spinners and pulses don't jump.
     const delay = `-${Date.now() % 1000}ms`;

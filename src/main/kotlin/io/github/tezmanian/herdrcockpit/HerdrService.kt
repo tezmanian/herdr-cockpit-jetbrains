@@ -9,6 +9,7 @@ import com.google.gson.JsonObject
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.projectView.ProjectView
 import com.intellij.ide.trustedProjects.TrustedProjects
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
@@ -21,6 +22,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.options.ShowSettingsUtil
@@ -45,6 +47,10 @@ import java.util.concurrent.TimeUnit
 private const val RECONNECT_GRACE_MS = 4000L
 private const val MANAGED_KEY = "herdr.cockpit.managed"
 private const val MOUNTED_KEY = "herdr.cockpit.mountedRoots"
+private const val ACTIVITY_KEY = "herdr.cockpit.spaceActivity"
+private val PLUGIN_VERSION: String by lazy {
+    PluginManagerCore.getPlugin(PluginId.getId("io.github.tezmanian.herdrcockpit"))?.version ?: "?"
+}
 
 @Service(Service.Level.PROJECT)
 class HerdrService(private val project: Project) : Disposable {
@@ -268,12 +274,19 @@ class HerdrService(private val project: Project) : Disposable {
         for (sp in next.spaces) for (a in sp.agents) {
             seen += a.id
             val since = stateSince[a.id]
-            if (since == null || since.first != a.status) stateSince[a.id] = a.status to now
+            if (since == null || since.first != a.status) {
+                stateSince[a.id] = a.status to now
+                if (!firstLoad) touchSpace(sp.label) // an agent started, finished, needs you
+            }
             val before = lastStatus[a.id]
             if (!firstLoad && before != null && a.status != null && before != a.status) notifyTransition(sp, a)
             lastStatus[a.id] = a.status
         }
         lastStatus.keys.retainAll(seen)
+        // Focused in Herdr or switched to here: recently used.
+        next.spaces.firstOrNull { it.focused }?.let { f ->
+            if (if (firstLoad) f.label !in spaceActivity else prev?.spaces?.firstOrNull { it.focused }?.id != f.id) touchSpace(f.label)
+        }
         stateSince.keys.retainAll(seen)
 
         // Close tabs whose panes no longer exist.
@@ -399,6 +412,12 @@ class HerdrService(private val project: Project) : Disposable {
                 activity = activity::get,
                 connection = connectionJson(),
                 usage = usage,
+                order = settings.spaceOrder ?: "activity",
+                lastActive = { spaceActivity[it.label] },
+                versions = JsonObject().apply {
+                    addProperty("cockpit", PLUGIN_VERSION)
+                    model?.version?.let { addProperty("herdr", it) }
+                },
             ),
         ).toString()
         if (state == lastState) return
@@ -409,6 +428,18 @@ class HerdrService(private val project: Project) : Disposable {
 
     // ---------- mounting a space as a content root ----------
     private fun props() = PropertiesComponent.getInstance(project)
+
+    /** When each space (by name: ids change across Herdr restarts) was last active; app-wide, kept across restarts. */
+    private val spaceActivity: MutableMap<String, Long> by lazy {
+        val saved = runCatching { com.google.gson.JsonParser.parseString(PropertiesComponent.getInstance().getValue(ACTIVITY_KEY, "{}")).asJsonObject }.getOrNull()
+        java.util.concurrent.ConcurrentHashMap<String, Long>().apply { saved?.entrySet()?.forEach { (k, v) -> runCatching { put(k, v.asLong) } } }
+    }
+
+    private fun touchSpace(label: String) {
+        spaceActivity[label] = System.currentTimeMillis()
+        val keep = JsonObject().apply { spaceActivity.entries.sortedByDescending { it.value }.take(200).forEach { addProperty(it.key, it.value) } }
+        PropertiesComponent.getInstance().setValue(ACTIVITY_KEY, keep.toString())
+    }
     private fun isManaged() = props().getBoolean(MANAGED_KEY, false)
     private fun mountedRoots(): List<String> = props().getList(MOUNTED_KEY) ?: emptyList()
 
