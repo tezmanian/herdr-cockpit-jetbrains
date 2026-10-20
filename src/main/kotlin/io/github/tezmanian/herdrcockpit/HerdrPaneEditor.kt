@@ -10,12 +10,14 @@ import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorPolicy
 import com.intellij.openapi.fileEditor.FileEditorProvider
 import com.intellij.openapi.fileEditor.FileEditorState
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileEditor.impl.EditorTabTitleProvider
 import com.intellij.openapi.fileTypes.PlainTextFileType
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Iconable
 import com.intellij.openapi.util.UserDataHolderBase
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.terminal.JBTerminalPanel
 import com.intellij.terminal.JBTerminalSystemSettingsProviderBase
@@ -25,6 +27,10 @@ import com.jediterm.core.util.TermSize
 import com.jediterm.terminal.ProcessTtyConnector
 import com.jediterm.terminal.model.StyleState
 import com.jediterm.terminal.model.TerminalTextBuffer
+import com.jediterm.terminal.model.hyperlinks.HyperlinkFilter
+import com.jediterm.terminal.model.hyperlinks.LinkInfo
+import com.jediterm.terminal.model.hyperlinks.LinkResult
+import com.jediterm.terminal.model.hyperlinks.LinkResultItem
 import com.jediterm.terminal.ui.settings.SettingsProvider
 import com.pty4j.PtyProcessBuilder
 import com.pty4j.WinSize
@@ -150,6 +156,19 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
             if (n != 0) connector.scroll(n < 0, WHEEL_LINES * kotlin.math.abs(n))
             e.consume()
         }
+        // `src/foo.ts:42` printed in the pane: a link to the file at that line, resolved against the pane's folder.
+        widget.addHyperlinkFilter(HyperlinkFilter { line ->
+            val hit = service.currentModel()?.find(file.paneId)
+            val bases = listOfNotNull(hit?.second?.cwd, hit?.first?.cwd).distinct()
+            val items = findFileRefs(line).take(50).mapNotNull { ref ->
+                val target = resolveRef(ref, bases, System.getProperty("user.home")) ?: return@mapNotNull null
+                LinkResultItem(ref.start, ref.start + ref.length, LinkInfo {
+                    val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(target) ?: return@LinkInfo
+                    OpenFileDescriptor(project, vf, (ref.line ?: 1) - 1, (ref.col ?: 1) - 1).navigate(true)
+                })
+            }
+            if (items.isEmpty()) null else LinkResult(items)
+        })
         widget.start(connector)
         acceptFileDrops(widget) { service.currentModel()?.find(file.paneId)?.second?.agentKind == "claude" }
     }

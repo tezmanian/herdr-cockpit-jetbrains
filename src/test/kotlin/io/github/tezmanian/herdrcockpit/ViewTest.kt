@@ -149,6 +149,23 @@ class ViewTest {
     }
 
     @Test
+    fun fileReferencesInTerminalLines() {
+        fun refs(s: String) = findFileRefs(s).map { listOf(s.substring(it.start, it.start + it.length), it.path, it.line, it.col) }
+        assertEquals(
+            listOf(listOf("src/termFind.ts:42:7", "src/termFind.ts", 42, 7), listOf("./a/b.py(12, 3)", "./a/b.py", 12, 3), listOf("README.md", "README.md", null, null)),
+            refs("Edited src/termFind.ts:42:7 and ./a/b.py(12, 3), see README.md."),
+        )
+        assertEquals("versions, URLs, abbreviations are not files", emptyList<Any>(), refs("v1.2.3 and https://github.com/a/b.ts e.g. foo"))
+        assertEquals(listOf(listOf("/abs/x.ts#L9", "/abs/x.ts", 9, null), listOf("~/notes/todo", "~/notes/todo", null, null)), refs("at /abs/x.ts#L9 ~/notes/todo"))
+        val exists = setOf("/p/pane/src/a.kt", "/p/space/b.kt", "/h/notes/todo")
+        val ok: (java.io.File) -> Boolean = { it.path in exists }
+        assertEquals("/p/pane/src/a.kt", resolveRef(FileRef(0, 0, "src/a.kt"), listOf("/p/pane", "/p/space"), "/h", ok)?.path)
+        assertEquals("/p/space/b.kt", resolveRef(FileRef(0, 0, "./b.kt"), listOf("/p/pane", "/p/space"), "/h", ok)?.path)
+        assertEquals("/h/notes/todo", resolveRef(FileRef(0, 0, "~/notes/todo"), emptyList(), "/h", ok)?.path)
+        assertNull(resolveRef(FileRef(0, 0, "missing.kt"), listOf("/p/pane"), "/h", ok))
+    }
+
+    @Test
     fun refusesBroadMounts() {
         listOf("/", "/home/u", "/x", "/x/a").forEach { assertTrue(it, tooBroadToMount(it, "/home/u", "/x/a")) }
         listOf("/x/ab", "/x/a/sub", "/home/u/code").forEach { assertFalse(it, tooBroadToMount(it, "/home/u", "/x/a")) }
