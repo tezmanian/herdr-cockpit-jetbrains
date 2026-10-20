@@ -8,7 +8,7 @@ from that project unchanged (see `THIRD_PARTY_NOTICES.md`); `media/help.html` is
 
 The plugin is a **client of the Herdr server**. It never owns agent processes; Herdr does.
 
-## What works (MVP, v0.1.8)
+## What works (MVP, v0.1.9)
 
 - **Herdr tool window** (left side): spaces, agents and shells with status, "Needs you", shell activity
   (what's running / last command / last output), git line per space (branch, last commit, ahead/behind, changes).
@@ -38,7 +38,9 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 - **Right-click a space or pane** in the sidebar: switch to it, unmount its folder (only a content root the plugin
   added), open, new tab, rename (space; shell label; agent name), close in Herdr after confirming (a pane, its tab
   when it's the only pane, a space, or a worktree space with its folder; forcing is offered when Herdr refuses because
-  of uncommitted changes), and "Show Raw" (Herdr's records for it as a read-only JSON tab).
+  of uncommitted changes), "Show Raw" (Herdr's records for it as a read-only JSON tab), and for agents **Hand Off to
+  Agent…** (also in the "is done" notification): pick an agent in any space and type what it should do; the prompt
+  (`agent.prompt`) adds where the work came from and `herdr agent read <pane>` to read its output.
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
   HEAD ↔ working tree diffs in one diff view (step through the files with the arrows). Uses the git CLI, so it also
   works for spaces that aren't mounted; only in trusted projects.

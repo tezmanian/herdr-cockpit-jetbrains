@@ -137,11 +137,35 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
                 add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
             }
             if (pane == null || pane.isAgent) add(Item("Review Changes", AllIcons.Actions.Diff) { review(space, pane) })
+            if (pane?.isAgent == true) add(Item("Hand Off to Agent…", AllIcons.Actions.Forward) { handOff(space, pane) })
             add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
             add(Item("Close in Herdr…", AllIcons.Actions.Close, "Herdr") { closeInHerdr(space, pane) })
             add(Item("Show Raw", AllIcons.FileTypes.Json, "Debug") { showRaw(space, pane) })
         }
         choose(null, items, atMouse = true)
+    }
+
+    /** Pick another agent (any space), write what it should do; the prompt says where the work came from. */
+    fun handOff(space: Space, pane: Pane) {
+        if (!connected()) return
+        val from = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
+        val targets = service.currentModel()?.spaces.orEmpty().flatMap { s -> s.agents.filter { it.id != pane.id }.map { s to it } }
+        if (targets.isEmpty()) return service.notify("No other agent in Herdr to hand off to.", NotificationType.INFORMATION)
+        choose("Hand off $from to", targets.map { (s, a) ->
+            Item("${editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)} (${a.status ?: AgentStatus.unknown})", null) {
+                val to = editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)
+                val text = Messages.showMultilineInputDialog(project, "What should $to do? A note on where it comes from is added.", "Hand Off to $to", null, null, null)
+                    ?.trim()?.takeIf { it.isNotEmpty() } ?: return@Item
+                run("Hand off to $to") {
+                    try {
+                        actions.promptAgent(a.id, text + handoffContext(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane))
+                    } catch (e: HerdrError) {
+                        if (e.code != "agent_blocked") throw e
+                        service.notify("$to is waiting for an answer; nothing was sent.", NotificationType.WARNING)
+                    }
+                }
+            }
+        })
     }
 
     /** Herdr's snapshot records (and, for a pane, the polled activity) as a read-only JSON tab. */

@@ -118,6 +118,7 @@ class ActionsTest {
         actions.closeSpace("w1", group = true)
         actions.focusSpace("w1")
         actions.removeWorktree("w2", force = true)
+        actions.promptAgent("w3:p1", "go")
         val sent = requests.map { it.str("method") to it.getAsJsonObject("params").toString() }
         assertEquals(
             listOf(
@@ -127,6 +128,7 @@ class ActionsTest {
                 "workspace.close" to """{"workspace_id":"w1","close_group":true}""",
                 "workspace.focus" to """{"workspace_id":"w1"}""",
                 "worktree.remove" to """{"workspace_id":"w2","force":true}""",
+                "agent.prompt" to """{"target":"w3:p1","text":"go"}""",
             ),
             sent,
         )

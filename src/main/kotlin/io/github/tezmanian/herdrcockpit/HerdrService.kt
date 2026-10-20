@@ -369,6 +369,7 @@ class HerdrService(private val project: Project) : Disposable {
             NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
                 .createNotification(text, if (st == AgentStatus.blocked) NotificationType.WARNING else NotificationType.INFORMATION)
                 .addAction(NotificationAction.createSimpleExpiring("Show") { model?.find(agent.id)?.let { (s, p) -> attachPane(s, p) } })
+                .apply { if (st == AgentStatus.done) addAction(NotificationAction.createSimpleExpiring("Hand Off…") { model?.find(agent.id)?.let { (s, p) -> manage.handOff(s, p) } }) }
                 .notify(project)
         }
     }

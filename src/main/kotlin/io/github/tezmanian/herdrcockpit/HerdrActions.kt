@@ -114,6 +114,8 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     fun renamePane(paneId: String, label: String?) = call("pane.rename", "pane_id" to paneId, "label" to label)
     /** `name` must match AGENT_NAME (agent names are CLI targets); null clears it. */
     fun renameAgent(paneId: String, name: String?) = call("agent.rename", "target" to paneId, "name" to name)
+    /** Text + Enter as one submission; Herdr refuses an agent waiting at a question ("agent_blocked"). */
+    fun promptAgent(paneId: String, text: String) = call("agent.prompt", "target" to paneId, "text" to text)
 
     fun processInfo(paneId: String): ProcInfo? =
         parseProcInfo(client.request("pane.process_info", JsonObject().apply { addProperty("pane_id", paneId) }, 5000))

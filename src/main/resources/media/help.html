@@ -303,10 +303,11 @@
   <table>
     <tr><th>On</th><th>Actions</th></tr>
     <tr><td>Space</td><td><b>Switch to Space</b> · <b>Unmount Folder</b> (only a folder the plugin added) · <b>New Tab…</b> · <b>Review Changes</b> · <b>Rename…</b> · <b>Close in Herdr…</b> · <b>Show Raw</b></td></tr>
-    <tr><td>Agent</td><td><b>Open</b> · <b>Review Changes</b> · <b>Rename…</b> · <b>Close in Herdr…</b> · <b>Show Raw</b></td></tr>
+    <tr><td>Agent</td><td><b>Open</b> · <b>Review Changes</b> · <b>Hand Off to Agent…</b> · <b>Rename…</b> · <b>Close in Herdr…</b> · <b>Show Raw</b></td></tr>
     <tr><td>Shell</td><td><b>Open</b> · <b>Rename…</b> · <b>Close in Herdr…</b> · <b>Show Raw</b></td></tr>
   </table>
   <p class="note">"Show Raw" opens Herdr's records for the item (and, for a pane, what the sidebar read of its activity) as JSON, useful when something looks wrong.</p>
+  <p class="note">"Hand Off to Agent…" (also in an agent's "is done" notification) sends another agent, in any space, what you type, plus where the work came from and the <code>herdr agent read</code> command to read the first agent's output. Nothing is sent while the receiving agent is waiting for an answer.</p>
 </section>
 
 <section id="elsewhere">

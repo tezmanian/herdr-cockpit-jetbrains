@@ -28,6 +28,10 @@ private fun tilde(p: String?) = if (p != null && (p == home || p.startsWith("$ho
 /** Editor tab title: which space, then the pane's name as the sidebar shows it. */
 fun editorTitle(space: Space, tab: Tab?, p: Pane) = "${space.label} · ${paneName(tab, p)}"
 
+/** Appended to a handoff prompt: where the work came from, and how the receiving agent reads it (via Herdr). */
+fun handoffContext(space: Space, tab: Tab?, p: Pane) =
+    "\n\n(Handed off from ${editorTitle(space, tab, p)}${space.cwd?.let { " in $it" } ?: ""}. Read its output with Herdr: `herdr agent read ${p.id} --lines 200`)"
+
 fun paneName(tab: Tab?, p: Pane): String {
     if (p.isAgent) {
         p.displayAgent?.let { return it }

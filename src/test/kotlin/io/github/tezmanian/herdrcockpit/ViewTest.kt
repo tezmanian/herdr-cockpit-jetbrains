@@ -120,6 +120,16 @@ class ViewTest {
     }
 
     @Test
+    fun handoffNamesTheSourceAndHowToReadIt() {
+        val w5 = fixture().space("w5")!!
+        val p3 = w5.panes.first { it.id == "w5:p3" }
+        assertEquals(
+            "\n\n(Handed off from ${w5.label} · Tab 3 in ${w5.cwd}. Read its output with Herdr: `herdr agent read w5:p3 --lines 200`)",
+            handoffContext(w5, w5.tabs.first { it.id == p3.tabId }, p3),
+        )
+    }
+
+    @Test
     fun droppedFilesAreTypedAsPaths() {
         assertEquals("/x/a.php '/x/my file.txt' '/x/it'\\''s' ", dropText(listOf(java.io.File("/x/a.php"), java.io.File("/x/my file.txt"), java.io.File("/x/it's"))))
         assertEquals("@/x/a.php @\"/x/my file.txt\" ", dropText(listOf(java.io.File("/x/a.php"), java.io.File("/x/my file.txt")), claude = true))
