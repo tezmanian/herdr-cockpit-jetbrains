@@ -29,6 +29,12 @@ intellijPlatform {
         ideaVersion {
             sinceBuild = "253"
         }
+        // The newest section of CHANGELOG.md, its "- " items as a list.
+        changeNotes = providers.fileContents(layout.projectDirectory.file("CHANGELOG.md")).asText.map { md ->
+            val section = md.substringAfter("\n## ").substringAfter('\n').substringBefore("\n## ")
+            val items = section.trim().split(Regex("""\n- """)).map { it.removePrefix("- ").replace(Regex("""\s*\n\s*"""), " ") }
+            items.joinToString("", "<ul>", "</ul>") { "<li>" + it.replace("&", "&amp;").replace("<", "&lt;") + "</li>" }
+        }
     }
     buildSearchableOptions = false
     pluginVerification {

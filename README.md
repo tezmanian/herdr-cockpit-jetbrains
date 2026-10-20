@@ -24,7 +24,10 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 - **Pane tabs**: a JediTerm terminal fed by `herdr terminal session control <pane> --takeover`. Typing, colors,
   resize, selection and copy work; the mouse wheel, Shift+PageUp/PageDown and Ctrl/Cmd+Home/End scroll Herdr's
   scrollback. File paths a program prints (`src/app.ts:42`) are links to the file at that line. *Open Pane Output in
-  Editor* (tab context menu, *Tools | Herdr*) shows the pane's whole history as a read-only document. Ctrl/Cmd+F in a pane tab opens it with the find bar. When another
+  Editor* (tab context menu, *Tools | Herdr*) shows the pane's whole history as a read-only document. Ctrl/Cmd+F opens a find bar over that history: the pane
+  scrolls to each match, matches are highlighted, Tab lists the matching lines; smart case and `/regex/`. On the line
+  being typed, Backspace/Delete deletes a selection and typing replaces it; Alt+click moves the cursor, Shift+click
+  extends the selection, and a selection dragged past the top or bottom scrolls Herdr's history. When another
   client takes the pane over, the tab keeps showing it read-only (`herdr terminal session observe`); the first key
   takes it back, and a notification offers *Take Back*. Windows record the panes they take in
   `~/.herdr-cockpit/claims` (the same files as the VS Code extension), so the notification can say who took it, and a
@@ -120,6 +123,8 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `HerdrToolWindow.kt` | JCEF tool window, `acquireVsCodeApi()` shim, theme → `--vscode-*` variables, actions |
 | `HerdrPaneEditor.kt`, `HerdrTtyConnector.kt` | pane editor tabs: JBTerminalWidget + TtyConnector over `terminal session control` (`observe` while another client has it); the Herdr TUI tab (pty4j) |
 | `TermLinks.kt` | file paths in pane output as links (port of `termLinks.ts`) |
+| `TermFind.kt`, `HerdrPaneFind.kt` | find in a pane's whole history (port of `termFind.ts`) and the pane tab's find bar |
+| `TermEdit.kt` | editing the typed line (delete/replace a selection, Alt+click) and selecting past the edge (port of `termScreen.ts`) |
 | `Claims.kt` | `~/.herdr-cockpit/claims`: which window took a pane (shared with the VS Code extension) |
 | `HerdrManage.kt` | dialogs and popups: new space/tab, rename, close, review, context menu, Show Raw, usage setup |
 | `HerdrStatusBar.kt` | status bar widget and tool window badge |

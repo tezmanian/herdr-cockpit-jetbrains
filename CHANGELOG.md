@@ -1,0 +1,43 @@
+# Changelog
+
+## 0.1.10
+- Pane tab: Ctrl/Cmd+F opens a find bar over the pane's whole history in Herdr. The pane scrolls to each match and
+  centers it, matches are highlighted, Enter/↑/F3 go to older and Shift+Enter/↓/Shift+F3 to newer matches, and Tab
+  lists every matching line. Smart case; `/regex/` searches with a regular expression.
+- Pane tab: Backspace or Delete deletes a selection on the line being typed, and typing replaces it.
+- Pane tab: Alt+click moves the cursor there, Shift+click extends the selection.
+- Pane tab: dragging a selection past the top or bottom row scrolls Herdr's history, and copying includes the rows
+  that scrolled out of view.
+
+## 0.1.9
+- Hand Off to Agent…: right-click an agent (or use the "is done" notification) to send another agent a task that
+  points at this agent's output.
+
+## 0.1.8
+- Pane tab: Ctrl/Cmd+F opens the pane's whole history as a document with the editor's find bar.
+
+## 0.1.7
+- Takeover: when another window or client takes a pane, the tab shows it read-only and says who has it; the first
+  key, or Take Back in the notification, takes it back.
+- Pane tab: Open Pane Output in Editor, file paths printed in a pane open the file at that line, and
+  Shift+PageUp/PageDown and Ctrl/Cmd+Home/End scroll Herdr's history.
+- Sidebar: busy and recently active spaces first.
+
+## 0.1.6
+- The status bar menu no longer offers Open Herdr TUI.
+
+## 0.1.5
+- Files dropped on a pane's tab are typed in as their paths (`@path` for Claude Code).
+
+## 0.1.4
+- Editor tabs titled "space · pane"; the sidebar is on the left; no broad content roots.
+
+## 0.1.3
+- Project picker for new spaces, Stop Herdr, and the JCEF dependency PhpStorm 2026.2 needs.
+
+## 0.1.1
+- The Herdr TUI tab shows the project's space; Start Herdr creates the first space in the project directory.
+
+## 0.1.0
+- Spaces, agents and shells in a sidebar; panes as editor tabs; new spaces and tabs, rename and close; review
+  changes; plan usage of Claude Code, Codex and Kiro; status bar; links from Herdr.

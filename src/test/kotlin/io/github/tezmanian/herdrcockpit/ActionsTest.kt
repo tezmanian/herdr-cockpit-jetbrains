@@ -149,6 +149,21 @@ class ActionsTest {
     }
 
     @Test
+    fun findScrollsTheViewAndReadsTheRevision() {
+        serve { m, _ ->
+            when (m) {
+                "pane.copy_motion" -> """{"type":"pane_copy_motion","cursor":{"row":0,"col":26},"content_revision":18}"""
+                else -> """{"pane":{"scroll":{"offset_from_bottom":50,"max_offset_from_bottom":290,"viewport_rows":12}}}"""
+            }
+        }
+        assertEquals(PaneScroll(50, 290, 12), actions.scrollPaneTo("w9:p1", 50))
+        assertEquals("""{"pane_id":"w9:p1","offset_from_bottom":50}""", params(0).toString())
+        assertEquals(18L, actions.paneRevision("w9:p1"))
+        assertEquals("""{"pane_id":"w9:p1","cursor":{"row":0,"col":0},"motion":"line_end"}""", params(1).toString())
+        assertEquals(PaneScroll(50, 290, 12), actions.paneScroll("w9:p1"))
+    }
+
+    @Test
     fun startAgentRetriesWhilePaneIsBusy() {
         var calls = 0
         serve { _, _ -> if (++calls < 3) "!agent_pane_busy" else """{"agent":{"pane_id":"w1:p7"}}""" }

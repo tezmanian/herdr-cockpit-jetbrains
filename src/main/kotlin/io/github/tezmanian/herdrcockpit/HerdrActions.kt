@@ -29,6 +29,9 @@ fun agentName(kind: String, taken: Collection<String>): String {
 fun favoriteAgents(setting: String?): List<String> =
     (setting ?: "").split(',', ' ').map { it.trim().lowercase() }.filter { it in AGENT_KINDS }.distinct()
 
+/** Herdr's view of a pane: `offset` rows above the bottom, at most `max`; `rows` on screen. */
+data class PaneScroll(val offset: Int, val max: Int, val rows: Int)
+
 /** A new tab or space: its first pane (attach it like any other pane). */
 data class Created(val paneId: String, val tabId: String?, val workspaceId: String?)
 
@@ -70,12 +73,31 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     fun createSpace(cwd: String, label: String?): Created =
         created(client.request("workspace.create", params("cwd" to cwd, "label" to label), 5000))
 
-    /** Focuses space `workspaceId` in Herdr's own view (what the TUI shows). */
+    private fun scrollOf(r: JsonObject): PaneScroll {
+        val s = r.getAsJsonObject("pane")?.getAsJsonObject("scroll") ?: throw HerdrError("bad_response", "Herdr gave no scroll position for this pane")
+        return PaneScroll(s.get("offset_from_bottom").asInt, s.get("max_offset_from_bottom").asInt, s.get("viewport_rows").asInt)
+    }
+
+    /** Where Herdr's view of a pane is in its history. */
+    fun paneScroll(paneId: String): PaneScroll = scrollOf(client.request("pane.get", JsonObject().apply { addProperty("pane_id", paneId) }, 5000))
+
+    /** Scrolls Herdr's view of a pane to `offset` rows above the bottom; answers where it is now. */
+    fun scrollPaneTo(paneId: String, offset: Int): PaneScroll = scrollOf(client.request("pane.scroll", JsonObject().apply {
+        addProperty("pane_id", paneId)
+        addProperty("offset_from_bottom", offset.coerceAtLeast(0))
+    }, 5000))
+
+    /** Changes whenever the pane's content does (`pane.copy_motion` without a revision just answers it). */
+    fun paneRevision(paneId: String): Long = client.request("pane.copy_motion", JsonObject().apply {
+        addProperty("pane_id", paneId)
+        add("cursor", JsonObject().apply { addProperty("row", 0); addProperty("col", 0) })
+        addProperty("motion", "line_end")
+    }, 5000).get("content_revision").asLong
+
     /** Everything Herdr keeps for a pane (scrollback and screen) as text. `cols` is the pane's width. */
     fun paneHistory(paneId: String, cols: Int): String {
-        val scroll = client.request("pane.get", JsonObject().apply { addProperty("pane_id", paneId) }, 5000).getAsJsonObject("pane")?.getAsJsonObject("scroll")
-            ?: throw HerdrError("bad_response", "Herdr gave no scroll position for this pane")
-        val last = scroll.get("max_offset_from_bottom").asInt + scroll.get("viewport_rows").asInt - 1
+        val scroll = paneScroll(paneId)
+        val last = scroll.max + scroll.rows - 1
         fun at(row: Int, col: Int) = JsonObject().apply { addProperty("row", row); addProperty("col", col) }
         fun read(col: Int) = client.request("pane.selection.read", JsonObject().apply {
             addProperty("pane_id", paneId)
@@ -86,6 +108,7 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
         return runCatching { read(cols - 1) }.getOrElse { read(0) }
     }
 
+    /** Focuses space `workspaceId` in Herdr's own view (what the TUI shows). */
     fun focusSpace(workspaceId: String) {
         client.request("workspace.focus", JsonObject().apply { addProperty("workspace_id", workspaceId) }, 5000)
     }

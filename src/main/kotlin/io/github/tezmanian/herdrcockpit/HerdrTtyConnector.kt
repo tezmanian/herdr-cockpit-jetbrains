@@ -68,6 +68,9 @@ class HerdrTtyConnector(
     @Volatile var observing = false
         private set
 
+    /** Herdr shows the live screen (not scrolled back), so the cursor is where the program put it. */
+    @Volatile var live = true
+
     /** Who has the pane while observing (null: a client that didn't say). */
     @Volatile private var holderName: String? = null
     private var controlSince = 0L
@@ -200,6 +203,7 @@ class HerdrTtyConnector(
         if (bytes.isEmpty()) return
         // Read-only: the first key takes control back and isn't sent (it could answer an agent's question).
         if (observing) return takeBack()
+        live = true // input returns Herdr's view to the live screen
         send(JsonObject().apply { addProperty("type", "terminal.input"); addProperty("bytes", Base64.getEncoder().encodeToString(bytes)) })
     }
 
@@ -226,6 +230,7 @@ class HerdrTtyConnector(
 
     /** Scrolls Herdr's scrollback for this pane (the screen JediTerm shows is Herdr's viewport). */
     fun scroll(up: Boolean, lines: Int) {
+        if (up) live = false
         send(JsonObject().apply {
             addProperty("type", "terminal.scroll")
             addProperty("direction", if (up) "up" else "down")
