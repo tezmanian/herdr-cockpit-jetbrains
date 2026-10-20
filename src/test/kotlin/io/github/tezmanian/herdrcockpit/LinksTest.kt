@@ -2,6 +2,7 @@
 package io.github.tezmanian.herdrcockpit
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -15,6 +16,13 @@ class LinksTest {
         assertEquals(Link.Review("w2", null), parse("review", "space" to "w2", "pane" to "").getOrThrow())
         assertEquals(Link.OpenFile("/a/b.php", 42, null), parse("file", "path" to "/a/b.php", "line" to "42").getOrThrow())
         assertEquals(Link.Open("w1", null), parse("open", "space" to "w1", "session" to "hcjb", session = "hcjb").getOrThrow())
+    }
+
+    @Test
+    fun onlyOurTokenGetsIn() {
+        assertTrue(tokenOk("abc123", "abc123"))
+        for (given in listOf(null, "", "abc12", "abc1234", "ABC123")) assertFalse("token $given", tokenOk(given, "abc123"))
+        assertFalse("an empty token of ours matches nothing", tokenOk("", ""))
     }
 
     @Test

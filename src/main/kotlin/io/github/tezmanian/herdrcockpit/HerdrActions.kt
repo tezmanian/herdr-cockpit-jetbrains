@@ -113,6 +113,9 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
         client.request("workspace.focus", JsonObject().apply { addProperty("workspace_id", workspaceId) }, 5000)
     }
 
+    /** Focuses an agent's pane in Herdr's own view; marks its "done" as seen. */
+    fun focusAgent(paneId: String) = call("agent.focus", "target" to paneId)
+
     /**
      * New space on a new git worktree (and branch) of the repo of space `workspaceId`. Herdr takes the repo
      * from either workspace_id or cwd and refuses both ("only one of workspace_id or cwd may be supplied").

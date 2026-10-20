@@ -169,7 +169,12 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         choose(title, targets.map { (s, a) ->
             Item("${editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)} (${a.status ?: AgentStatus.unknown})", null) {
                 val to = editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)
-                val text = Messages.showMultilineInputDialog(project, "What should $to do?" + if (suffix.isNotEmpty()) " A note on where it comes from is added." else "", "$verb $to", initial, null, null)
+                val text = Messages.showMultilineInputDialog(project, "What should $to do?" + if (suffix.isNotEmpty()) " A note on where it comes from is added." else "", "$verb $to", initial, null, object : InputValidatorEx {
+                    // OK stays off until there's something to send beyond the prefilled code.
+                    override fun getErrorText(t: String?) = if (t.isNullOrBlank() || t.trim() == initial.trim()) "Write what $to should do" else null
+                    override fun checkInput(t: String?) = getErrorText(t) == null
+                    override fun canClose(t: String?) = checkInput(t)
+                })
                     ?.trim()?.takeIf { it.isNotEmpty() && it != initial.trim() } ?: return@Item
                 run("$verb $to") {
                     try {

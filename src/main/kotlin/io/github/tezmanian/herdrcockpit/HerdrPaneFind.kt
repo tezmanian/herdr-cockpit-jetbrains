@@ -27,6 +27,8 @@ data class Mark(val y: Int, val from: Int, val to: Int, val current: Boolean)
 
 /** Typing in the find bar: wait this long before searching. */
 private const val FIND_DEBOUNCE_MS = 120
+/** Stepping through matches reads a changed history again at most this often. */
+private const val RECHECK_MS = 1000
 /** Matches listed by Tab in the find bar. */
 private const val LIST_MAX = 2000
 
@@ -184,8 +186,11 @@ class PaneFindBar(private val project: Project, private val paneId: String, priv
             return
         }
         jump((cur + dir + matches.size) % matches.size)
-        // If the pane's content changed since it was read, search again (rows may have moved).
-        val rev = text?.revision
+        // If the pane's content changed since it was read, search again (rows may have moved); a pane that keeps
+        // printing (a working agent) is read again at most every RECHECK_MS, not on every step.
+        val t = text ?: return
+        if (System.currentTimeMillis() - t.readAt < RECHECK_MS) return
+        val rev = t.revision
         async({ actions.paneRevision(paneId) }) { if (it != rev) search() }
     }
 
@@ -233,7 +238,8 @@ class PaneFindBar(private val project: Project, private val paneId: String, priv
         val top = v.max - v.offset - drift
         val bottom = top + host.rows
         val out = ArrayList<Mark>()
-        for ((i, m) in matches.withIndex()) {
+        for (i in firstEndingFrom(matches, top) until matches.size) {
+            val m = matches[i]
             if (m.row >= bottom) break
             for (s in m.spans) if (s.row in top until bottom) out += Mark(s.row - top, s.from, s.to, i == cur)
         }

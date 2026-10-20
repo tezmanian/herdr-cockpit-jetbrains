@@ -59,7 +59,13 @@ class Layout(line: String, cols: Int) {
 }
 
 /** A pane's history as text, with the screen row each line starts on. */
-class PaneText(val lines: List<String>, val cols: Int, /** The content revision it was read at. */ val revision: Long? = null) {
+class PaneText(
+    val lines: List<String>,
+    val cols: Int,
+    /** The content revision it was read at. */
+    val revision: Long? = null,
+    val readAt: Long = System.currentTimeMillis(),
+) {
     val layouts = lines.map { Layout(it, cols) }
     val starts: List<Int> = layouts.runningFold(0) { row, l -> row + l.rows }.dropLast(1)
 }
@@ -113,6 +119,17 @@ fun findMatches(text: PaneText, re: Pattern, limit: Int = 100_000): List<Match> 
 fun offsetFor(row: Int, maxOffset: Int, viewportRows: Int): Int {
     val top = row - (viewportRows - 1) / 2
     return (maxOffset - top).coerceIn(0, maxOffset)
+}
+
+/** The first match that ends on `row` or below it (matches end in order): where the ones on screen start. */
+fun firstEndingFrom(matches: List<Match>, row: Int): Int {
+    var lo = 0
+    var hi = matches.size
+    while (lo < hi) {
+        val mid = (lo + hi) ushr 1
+        if (matches[mid].spans.last().row < row) lo = mid + 1 else hi = mid
+    }
+    return lo
 }
 
 /** The match to start at: the last one above the bottom of the view (the newest, when at the live screen). */

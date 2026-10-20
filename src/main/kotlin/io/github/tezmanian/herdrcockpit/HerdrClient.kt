@@ -106,12 +106,13 @@ class HerdrClient(private val socketPath: () -> String) {
     fun subscribe(subscriptions: List<JsonObject>, onEvent: (JsonObject) -> Unit, onEnd: (Exception?) -> Unit): Subscription {
         val id = nextId("sub")
         val disposed = AtomicBoolean(false)
-        var channel: SocketChannel? = null
+        // Closed from the caller's thread by dispose().
+        val channel = java.util.concurrent.atomic.AtomicReference<SocketChannel?>()
         val thread = Thread({
             var err: Exception? = null
             try {
                 val ch = open(socketPath())
-                channel = ch
+                channel.set(ch)
                 if (disposed.get()) { ch.close(); return@Thread }
                 val params = JsonObject().apply { add("subscriptions", com.google.gson.JsonArray().apply { subscriptions.forEach { add(it) } }) }
                 ch.send(JsonObject().apply { addProperty("id", id); addProperty("method", "events.subscribe"); add("params", params) })
@@ -130,7 +131,7 @@ class HerdrClient(private val socketPath: () -> String) {
             } catch (e: Exception) {
                 err = e
             } finally {
-                runCatching { channel?.close() }
+                runCatching { channel.get()?.close() }
             }
             if (!disposed.get()) onEnd(err)
         }, "herdr-events")
@@ -138,7 +139,7 @@ class HerdrClient(private val socketPath: () -> String) {
         thread.start()
         return Subscription {
             disposed.set(true)
-            runCatching { channel?.close() }
+            runCatching { channel.get()?.close() }
         }
     }
 }

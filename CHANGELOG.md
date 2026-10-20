@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.11
+- Plan usage reads Claude Code transcripts only where they grew, and Kiro sessions only when they changed, instead of
+  every file every minute in every window.
+- Pane find bar: stepping through matches of a pane that keeps printing reads its history at most once a second, and
+  highlighting only looks at the matches on screen.
+- Send to Agent…: OK stays off until you've written what the agent should do.
+- Links from Herdr: the token check is a tested function; an empty token never matches.
+- Pane names of closed panes are dropped; focusing a space or agent goes through the tested Herdr calls.
+
 ## 0.1.10
 - Send to Agent…: right-click in the editor (the selection or the caret's line) or on files in the project view to
   send them to an agent in Herdr, with what it should do.

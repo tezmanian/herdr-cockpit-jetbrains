@@ -64,6 +64,19 @@ class UsageTest {
     }
 
     @Test
+    fun claudeTranscriptsAreReadIncrementally() {
+        val line = { id: String, n: Int -> """{"timestamp":"2026-10-14T10:20:00Z","requestId":"r$id","message":{"id":"m$id","usage":{"input_tokens":$n}}}""" }
+        val f = write(".claude/projects/p/s.jsonl", line("1", 1) + "\n" + line("2", 2)) // the last line still being written
+        fun tokens() = claudeUsage(home.path, now)!!.getAsJsonObject("block").get("tokens").asLong
+        assertEquals(3, tokens())
+        f.appendText("\n" + line("2", 2) + "\n" + line("3", 4) + "\n") // line 2 complete, streamed again, then 3
+        assertEquals("appended lines counted, duplicates once", 7, tokens())
+        assertEquals("nothing new: the same", 7, tokens())
+        f.writeText(line("9", 50) + "\n") // rewritten shorter
+        assertEquals("a shrunk file is read again", 50, tokens())
+    }
+
+    @Test
     fun blocksStartAtTheHourAndExpire() {
         val h = 3_600_000L
         val e = listOf(TokenEntry(10 * h + 5, 1, 0), TokenEntry(14 * h, 2, 0), TokenEntry(16 * h, 4, 0))

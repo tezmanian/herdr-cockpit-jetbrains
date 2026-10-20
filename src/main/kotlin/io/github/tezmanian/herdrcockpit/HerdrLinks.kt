@@ -38,6 +38,10 @@ sealed class Link {
 }
 
 /** A link's action and query, validated. Returns the link, or why it was refused. */
+/** The link's token is ours (constant-time); an empty token of ours never matches. */
+fun tokenOk(given: String?, token: String): Boolean =
+    token.isNotEmpty() && given != null && MessageDigest.isEqual(given.toByteArray(), token.toByteArray())
+
 fun parseLink(action: String, q: (String) -> String?, ourSession: String?): Result<Link> = runCatching {
     val session = q("session")?.takeIf { it.isNotEmpty() }
     require(session == ourSession) { "this link is for Herdr session ${session ?: "default"}, the IDE uses ${ourSession ?: "default"}" }
@@ -128,8 +132,7 @@ class HerdrLinkService : RestService() {
     override fun isHostTrusted(request: FullHttpRequest, urlDecoder: QueryStringDecoder) = !request.headers().contains(HttpHeaderNames.ORIGIN)
 
     override fun execute(urlDecoder: QueryStringDecoder, request: FullHttpRequest, context: ChannelHandlerContext): String? {
-        val given = getStringParameter("token", urlDecoder) ?: ""
-        if (!MessageDigest.isEqual(given.toByteArray(), HerdrLinks.token.toByteArray())) return "bad token"
+        if (!tokenOk(getStringParameter("token", urlDecoder), HerdrLinks.token)) return "bad token"
         val action = urlDecoder.path().substringAfter("/herdr-cockpit", "").trim('/')
         val ourSession = ProjectManager.getInstance().openProjects.firstOrNull()?.let { sessionOfSocket(HerdrService.getInstance(it).socketPath()) }
         val link = parseLink(action, { getStringParameter(it, urlDecoder) }, ourSession).getOrElse { return it.message ?: "bad link" }

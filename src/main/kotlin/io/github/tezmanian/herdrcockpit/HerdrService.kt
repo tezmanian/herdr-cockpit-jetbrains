@@ -269,6 +269,7 @@ class HerdrService(private val project: Project) : Disposable {
             if (was != null && was != n) files[p.id]?.let { f -> f.title = n; edt { FileEditorManagerEx.getInstanceEx(project).updateFilePresentation(f) } }
             paneNames[p.id] = n
         }
+        paneNames.keys.retainAll(next.spaces.flatMap { it.panes.map { p -> p.id } }.toSet())
 
         // Notifications on agent transitions.
         val now = System.currentTimeMillis()
@@ -550,7 +551,7 @@ class HerdrService(private val project: Project) : Disposable {
                 space.cwd?.let { LocalFileSystem.getInstance().findFileByPath(it) }?.let { ProjectView.getInstance(project).select(null, it, false) }
             }
             if (!fromHerdr) {
-                loop.execute { guard { client.request("workspace.focus", JsonObject().apply { addProperty("workspace_id", space.id) }) } }
+                loop.execute { guard { actions.focusSpace(space.id) } }
                 lastFocusedSpace = space.id // don't let follow mode bounce us
             }
             if (settings.closeTerminalsOnSwitch) {
@@ -572,7 +573,7 @@ class HerdrService(private val project: Project) : Disposable {
     fun attachPane(space: Space, pane: Pane) {
         if (files[pane.id]?.connector == null && settings.mountOnSwitch && !isMounted(space) && space.cwd != null) switchTo(space, autoAttach = false)
         openTab(space, pane, focus = true)
-        if (pane.isAgent) loop.execute { runCatching { client.request("agent.focus", JsonObject().apply { addProperty("target", pane.id) }) } }
+        if (pane.isAgent) loop.execute { runCatching { actions.focusAgent(pane.id) } }
     }
 
     private fun openTab(space: Space, pane: Pane, focus: Boolean, polite: Boolean = false) {

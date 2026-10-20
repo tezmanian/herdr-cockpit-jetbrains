@@ -155,6 +155,45 @@ fun currentBlock(entries: List<TokenEntry>, now: Long): Block? {
     return block?.takeIf { it.endsAt > now }
 }
 
+/** A transcript's usage lines as (dedupe key, entry); null when the line has none. */
+private fun claudeEntry(line: String): Pair<String, TokenEntry>? {
+    if ("\"usage\"" !in line) return null
+    val o = parse(line) ?: return null
+    val msg = o.get("message").obj() ?: return null
+    val u = msg.get("usage").obj() ?: return null
+    val ts = time(o.get("timestamp").str()) ?: return null
+    fun n(k: String) = u.get(k).num()?.toLong() ?: 0L
+    val key = "${msg.get("id").str() ?: ""}:${o.get("requestId").str() ?: ""}"
+    return key to TokenEntry(ts, n("input_tokens") + n("output_tokens") + n("cache_creation_input_tokens"), n("cache_read_input_tokens"))
+}
+
+/** A transcript read up to `offset` (the end of its last full line), and the usage entries found there. */
+private class Transcript(var offset: Long = 0, val entries: ArrayList<Pair<String, TokenEntry>> = ArrayList())
+
+/** Shared by every window's poll: a transcript (often tens of MB) is read once, then only what was appended. */
+private val transcripts = HashMap<String, Transcript>()
+
+/** The usage entries of `files` since `since`: cached ones plus what was appended (a shrunk file is read again). */
+private fun claudeEntries(files: List<File>, since: Long): List<Pair<String, TokenEntry>> = synchronized(transcripts) {
+    val out = ArrayList<Pair<String, TokenEntry>>()
+    for (f in files) runCatching {
+        val t = transcripts[f.path]?.takeIf { f.length() >= it.offset } ?: Transcript().also { transcripts[f.path] = it }
+        val bytes = RandomAccessFile(f, "r").use { r ->
+            r.seek(t.offset)
+            ByteArray((r.length() - t.offset).toInt()).also { r.readFully(it) }
+        }
+        val full = bytes.lastIndexOf('\n'.code.toByte()) + 1
+        String(bytes, 0, full, Charsets.UTF_8).lineSequence().mapNotNullTo(t.entries) { claudeEntry(it) }
+        t.offset += full
+        t.entries.removeAll { it.second.ts < since }
+        out += t.entries
+        // A last line still being written counts now, and is cached once it's complete.
+        if (full < bytes.size) claudeEntry(String(bytes, full, bytes.size - full, Charsets.UTF_8))?.let { out += it }
+    }
+    transcripts.keys.retainAll(files.map { it.path }.toSet())
+    out.filter { it.second.ts >= since }
+}
+
 fun claudeUsage(home: String, now: Long): JsonObject? {
     if (!File(home, ".claude").isDirectory) return null
     val usage = provider("claude", "Claude Code")
@@ -177,24 +216,9 @@ fun claudeUsage(home: String, now: Long): JsonObject? {
     val since = now - 10 * HOUR
     val seen = HashSet<String>()
     val entries = ArrayList<TokenEntry>()
-    for (f in recentFiles(File(home, ".claude/projects"), ".jsonl", since, 4)) {
-        runCatching {
-            f.useLines { lines ->
-                for (line in lines) {
-                    if ("\"usage\"" !in line) continue
-                    val o = parse(line) ?: continue
-                    val msg = o.get("message").obj() ?: continue
-                    val u = msg.get("usage").obj() ?: continue
-                    val ts = time(o.get("timestamp").str()) ?: continue
-                    if (ts < since) continue
-                    // Streaming writes the same message more than once.
-                    val key = "${msg.get("id").str() ?: ""}:${o.get("requestId").str() ?: ""}"
-                    if (key != ":" && !seen.add(key)) continue
-                    fun n(k: String) = u.get(k).num()?.toLong() ?: 0L
-                    entries += TokenEntry(ts, n("input_tokens") + n("output_tokens") + n("cache_creation_input_tokens"), n("cache_read_input_tokens"))
-                }
-            }
-        }
+    for ((key, e) in claudeEntries(recentFiles(File(home, ".claude/projects"), ".jsonl", since, 4), since)) {
+        // Streaming writes the same message more than once.
+        if (key == ":" || seen.add(key)) entries += e
     }
     // Claude reports when its 5-hour session resets: count exactly that window. Otherwise estimate it.
     val block = fiveHourReset?.let { end ->
@@ -215,6 +239,31 @@ fun claudeUsage(home: String, now: Long): JsonObject? {
 
 // ---------- Kiro ----------
 
+/** A Kiro session file's turns as (end time, credits), kept until the file changes (it's rewritten whole). */
+private class KiroSession(val modified: Long, val length: Long, val turns: List<Pair<Long, Double>>)
+private val kiroSessions = HashMap<String, KiroSession>()
+
+private fun kiroTurns(files: List<File>): List<Pair<Long, Double>> = synchronized(kiroSessions) {
+    val out = ArrayList<Pair<Long, Double>>()
+    for (f in files) {
+        val (modified, length) = f.lastModified() to f.length()
+        val s = kiroSessions[f.path]?.takeIf { it.modified == modified && it.length == length } ?: run {
+            val turns = runCatching {
+                JsonParser.parseString(f.readText()).obj()?.get("session_state").obj()?.get("conversation_metadata").obj()?.get("user_turn_metadatas")
+            }.getOrNull()?.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { t ->
+                val turn = t.obj() ?: return@mapNotNull null
+                val ts = time(turn.get("end_timestamp").str()) ?: return@mapNotNull null
+                ts to (turn.get("metering_usage")?.takeIf { it.isJsonArray }?.asJsonArray
+                    ?.mapNotNull { it.obj()?.takeIf { m -> m.get("unit").str() == "credit" }?.get("value").num() }?.sum() ?: 0.0)
+            }.orEmpty()
+            KiroSession(modified, length, turns).also { kiroSessions[f.path] = it }
+        }
+        out += s.turns
+    }
+    kiroSessions.keys.retainAll(files.map { it.path }.toSet())
+    out
+}
+
 fun kiroUsage(home: String, now: Long, monthlyLimit: Int, zone: ZoneId = ZoneId.systemDefault()): JsonObject? {
     val dir = File(home, ".kiro/sessions/cli")
     if (!dir.isDirectory) return null
@@ -223,19 +272,11 @@ fun kiroUsage(home: String, now: Long, monthlyLimit: Int, zone: ZoneId = ZoneId.
     val dayStart = day.atStartOfDay(zone).toInstant().toEpochMilli()
     var month = 0.0
     var today = 0.0
-    for (f in recentFiles(dir, ".json", monthStart, 0)) {
-        val turns = runCatching {
-            JsonParser.parseString(f.readText()).obj()?.get("session_state").obj()?.get("conversation_metadata").obj()?.get("user_turn_metadatas")
-        }.getOrNull()?.takeIf { it.isJsonArray }?.asJsonArray ?: continue
-        for (t in turns) {
-            val turn = t.obj() ?: continue
-            val ts = time(turn.get("end_timestamp").str()) ?: continue
-            if (ts < monthStart) continue
-            val used = turn.get("metering_usage")?.takeIf { it.isJsonArray }?.asJsonArray
-                ?.mapNotNull { it.obj()?.takeIf { m -> m.get("unit").str() == "credit" }?.get("value").num() }?.sum() ?: 0.0
-            month += used
-            if (ts >= dayStart) today += used
-        }
+    val files = recentFiles(dir, ".json", monthStart, 0)
+    for ((ts, used) in kiroTurns(files)) {
+        if (ts < monthStart) continue
+        month += used
+        if (ts >= dayStart) today += used
     }
     // Kiro's allowance renews monthly; the calendar month is the closest local stand-in for the billing cycle.
     val nextMonth = day.withDayOfMonth(1).plusMonths(1).atStartOfDay(zone).toInstant().toEpochMilli()

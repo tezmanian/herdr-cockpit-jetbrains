@@ -54,6 +54,11 @@ class FindTest {
         )
         assertEquals("case-sensitive with a capital", 0, findMatches(text, q("Error")).size)
         assertEquals("no empty matches, no endless loop", 1, findMatches(PaneText(listOf("aaa"), 80), q("/a*/")).size)
+        assertEquals("the ones on screen from row 1: the one wrapping into it", 0, firstEndingFrom(ms, 1))
+        assertEquals(1, firstEndingFrom(ms, 2))
+        assertEquals("two on row 6", 2, firstEndingFrom(ms, 4))
+        assertEquals("the second one wraps to row 7", 3, firstEndingFrom(ms, 7))
+        assertEquals("none below", 4, firstEndingFrom(ms, 8))
         assertEquals("the newest match at or above the view bottom", 1, startAt(ms, 5))
         assertEquals(3, startAt(ms, 100))
         // The history has max + rows rows; the top row is max - offset.
