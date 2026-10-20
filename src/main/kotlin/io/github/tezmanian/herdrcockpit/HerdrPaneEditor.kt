@@ -7,8 +7,12 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.dnd.FileCopyPasteUtil
 import com.intellij.ide.FileIconProvider
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditor
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorPolicy
 import com.intellij.openapi.fileEditor.FileEditorProvider
 import com.intellij.openapi.fileEditor.FileEditorState
@@ -138,8 +142,14 @@ fun scrollKey(code: Int, modifiers: Int, rows: Int): Pair<Boolean, Int>? {
     }
 }
 
+/** Ctrl+F (Cmd+F on a Mac): find in the pane's whole history instead of JediTerm's search, which sees only Herdr's viewport. */
+fun isFindKey(code: Int, modifiers: Int): Boolean =
+    code == KeyEvent.VK_F && modifiers and (InputEvent.CTRL_DOWN_MASK or InputEvent.META_DOWN_MASK) != 0 &&
+        modifiers and (InputEvent.SHIFT_DOWN_MASK or InputEvent.ALT_DOWN_MASK) == 0
+
 class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneFile) : UserDataHolderBase(), FileEditor {
     private val widget: HerdrTerminalWidget = HerdrTerminalWidget(project, this) { e ->
+        if (isFindKey(e.keyCode, e.modifiersEx)) return@HerdrTerminalWidget true.also { openOutput(find = true) }
         val (up, lines) = scrollKey(e.keyCode, e.modifiersEx, widget.terminalTextBuffer.height) ?: return@HerdrTerminalWidget false
         file.connector?.scroll(up, lines)
         true
@@ -177,8 +187,9 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
         acceptFileDrops(widget) { service.currentModel()?.find(file.paneId)?.second?.agentKind == "claude" }
     }
 
-    /** The pane's whole history from Herdr as a read-only document, caret at the end. */
-    fun openOutput() {
+    /** The pane's whole history from Herdr as a read-only document, caret at the end; `find` opens the editor's find bar. */
+    // shortcut: find works in the document, the pane itself doesn't scroll to the match (upstream's own find bar, #19)
+    fun openOutput(find: Boolean = false) {
         val service = HerdrService.getInstance(project)
         val cols = widget.terminalTextBuffer.width
         ApplicationManager.getApplication().executeOnPooledThread {
@@ -188,6 +199,10 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
             ApplicationManager.getApplication().invokeLater({
                 val doc = LightVirtualFile("${file.title}.log", PlainTextFileType.INSTANCE, text.trimEnd() + "\n").apply { isWritable = false }
                 OpenFileDescriptor(project, doc, doc.length.toInt()).navigate(true)
+                if (find) FileEditorManager.getInstance(project).selectedTextEditor?.let { ed ->
+                    val am = ActionManager.getInstance()
+                    am.tryToExecute(am.getAction(IdeActions.ACTION_FIND), null, ed.contentComponent, ActionPlaces.UNKNOWN, true)
+                }
             }, project.disposed)
         }
     }

@@ -8,7 +8,7 @@ from that project unchanged (see `THIRD_PARTY_NOTICES.md`); `media/help.html` is
 
 The plugin is a **client of the Herdr server**. It never owns agent processes; Herdr does.
 
-## What works (MVP, v0.1.7)
+## What works (MVP, v0.1.8)
 
 - **Herdr tool window** (left side): spaces, agents and shells with status, "Needs you", shell activity
   (what's running / last command / last output), git line per space (branch, last commit, ahead/behind, changes).
@@ -24,7 +24,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 - **Pane tabs**: a JediTerm terminal fed by `herdr terminal session control <pane> --takeover`. Typing, colors,
   resize, selection and copy work; the mouse wheel, Shift+PageUp/PageDown and Ctrl/Cmd+Home/End scroll Herdr's
   scrollback. File paths a program prints (`src/app.ts:42`) are links to the file at that line. *Open Pane Output in
-  Editor* (tab context menu, *Tools | Herdr*) shows the pane's whole history as a read-only document. When another
+  Editor* (tab context menu, *Tools | Herdr*) shows the pane's whole history as a read-only document. Ctrl/Cmd+F in a pane tab opens it with the find bar. When another
   client takes the pane over, the tab keeps showing it read-only (`herdr terminal session observe`); the first key
   takes it back, and a notification offers *Take Back*. Windows record the panes they take in
   `~/.herdr-cockpit/claims` (the same files as the VS Code extension), so the notification can say who took it, and a

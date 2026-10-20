@@ -146,6 +146,9 @@ class ViewTest {
         assertEquals(false to 65535, scrollKey(key("END"), meta, 32))
         assertNull("plain PageUp goes to the program", scrollKey(key("PAGE_UP"), 0, 32))
         assertNull(scrollKey(key("HOME"), 0, 32))
+        assertTrue(isFindKey(key("F"), ctrl) && isFindKey(key("F"), meta))
+        assertFalse("plain f is typed", isFindKey(key("F"), 0))
+        assertFalse(isFindKey(key("F"), ctrl or shift))
     }
 
     @Test

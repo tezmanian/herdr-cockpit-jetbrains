@@ -287,6 +287,7 @@
     <li>Selecting and copying work like in the IDE's terminal. The mouse wheel scrolls the pane's scrollback in Herdr, and so do <b>Shift+PageUp/PageDown</b> (a page) and <b>Ctrl+Home/End</b> (<b>Cmd+Home/End</b> on a Mac: to the top or bottom).</li>
     <li>A file path the program prints (<code>src/app.ts:42</code>, <code>./a/b.py(12)</code>, <code>~/notes.md</code>) is a link: click it to open the file at that line. Relative paths are resolved against the pane's folder, then the space's; only files that exist become links.</li>
     <li><b>Open Pane Output in Editor</b> (right-click the tab, or <i>Tools | Herdr</i>): everything Herdr keeps for the pane, its whole scrollback, as a read-only document to search and copy from.</li>
+    <li><b>Ctrl+F</b> (<b>Cmd+F</b> on a Mac) in a pane tab opens that document with the editor's find bar, so you search the pane's whole history, not just the screen (regular expressions, match count, F3 / Shift+F3). The pane itself doesn't scroll to the match.</li>
     <li><b>Closing a tab only detaches</b>: the program keeps running in Herdr. With the setting <b>Closing a pane's tab yourself</b> set to <b>ask</b> or
       <b>always</b>, closing a tab with its X closes the pane in Herdr too (ask: idle shells right away, agents and busy shells after asking).
       Tabs the plugin closes, and closing the project or the IDE, never close anything in Herdr.</li>
