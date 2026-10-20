@@ -45,6 +45,15 @@ class ClientTest {
     }
 
     @Test
+    fun runCommandGivesUpOnAHungProcess() {
+        val env = mapOf("PATH" to (System.getenv("PATH") ?: "/usr/bin:/bin"))
+        val t0 = System.nanoTime()
+        assertEquals(null, runCommand(listOf("sleep", "10"), env, 1))
+        assertTrue("killed after about 1s", System.nanoTime() - t0 < 5_000_000_000L)
+        assertEquals(0 to "hi\n", runCommand(listOf("echo", "hi"), env, 5))
+    }
+
+    @Test
     fun requestReturnsResultAndMapsErrors() {
         serve { req, _ ->
             val id = req.get("id").asString

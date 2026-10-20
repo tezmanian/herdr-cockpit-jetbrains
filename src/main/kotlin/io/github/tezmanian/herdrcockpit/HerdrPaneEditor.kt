@@ -13,6 +13,7 @@ import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerKeys
 import com.intellij.openapi.fileEditor.FileEditorPolicy
 import com.intellij.openapi.fileEditor.FileEditorProvider
 import com.intellij.openapi.fileEditor.FileEditorState
@@ -68,6 +69,8 @@ class HerdrPaneFile(val paneId: String, val spaceId: String, var title: String, 
 
     init {
         isWritable = false
+        // A second editor (split) would take the pane from the first one.
+        putUserData(FileEditorManagerKeys.FORBID_TAB_SPLIT, true)
     }
 
     /** The stream ended without the tab being closed: the tab only shows a note. */
@@ -448,6 +451,7 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
         override fun closed() { widget.terminalPanel.requestFocusInWindow() }
         override fun openOutput() = this@HerdrPaneEditor.openOutput()
     })
+    private val connector: HerdrTtyConnector
     private val component = JPanel(BorderLayout()).apply {
         add(findBar, BorderLayout.NORTH)
         add(widget, BorderLayout.CENTER)
@@ -455,7 +459,7 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
 
     init {
         val service = HerdrService.getInstance(project)
-        val connector = HerdrTtyConnector(service.binary(), file.paneId, service.herdrEnvNow(), file.title, service.paneHooks(file.paneId), file.polite) { why ->
+        connector = HerdrTtyConnector(service.binary(), file.paneId, service.herdrEnvNow(), file.title, service.paneHooks(file.paneId), file.polite) { why ->
             service.log("pane ${file.paneId}: $why")
             service.scheduleRender()
         }
@@ -520,8 +524,8 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
 
     override fun dispose() {
         findBar.dispose()
-        file.connector?.close()
-        file.connector = null
+        connector.close()
+        if (file.connector === connector) file.connector = null
         HerdrService.getInstance(project).scheduleRender()
     }
 }

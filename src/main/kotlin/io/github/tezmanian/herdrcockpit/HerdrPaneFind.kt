@@ -155,6 +155,7 @@ class PaneFindBar(private val project: Project, private val paneId: String, priv
         val re = try {
             compileQuery(q)
         } catch (e: PatternSyntaxException) {
+            seq++ // a search still on its way must not overwrite the error
             matches = emptyList(); cur = -1; error = "Invalid regular expression"
             return paintInfo()
         }

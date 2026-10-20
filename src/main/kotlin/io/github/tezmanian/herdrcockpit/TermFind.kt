@@ -76,7 +76,7 @@ data class Match(val line: Int, val index: Int, val length: Int, val row: Int, v
  */
 fun compileQuery(q: String): Pattern? {
     if (q.isEmpty()) return null
-    val re = Regex("^/(.+)/([a-z]*)$").find(q)
+    val re = Regex("^/(.+)/([ims]*)$").find(q)
     val source = re?.groupValues?.get(1) ?: Pattern.quote(q)
     val flags = re?.groupValues?.get(2) ?: ""
     val letters = if (re != null) source.replace(Regex("\\\\."), "") else q // `\S`, `\W` aren't capitals

@@ -11,6 +11,7 @@ package io.github.tezmanian.herdrcockpit
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.io.File
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 /** The Herdr protocol this build was written against (herdr 0.9.1 - 0.9.3). */
@@ -60,8 +61,15 @@ fun runCommand(cmd: List<String>, env: Map<String, String>, timeoutSec: Long = 5
     pb.environment().putAll(env)
     val p = pb.start()
     p.outputStream.close()
+    // Killed on time even while we block reading: a hung process never closes its output.
+    var timedOut = false
+    val killer = CompletableFuture.delayedExecutor(timeoutSec, TimeUnit.SECONDS).let { ex ->
+        CompletableFuture.runAsync({ if (p.isAlive) { timedOut = true; p.destroyForcibly() } }, ex)
+    }
     val out = p.inputStream.bufferedReader().readText()
-    if (!p.waitFor(timeoutSec, TimeUnit.SECONDS)) { p.destroyForcibly(); null } else p.exitValue() to out
+    p.waitFor()
+    killer.cancel(false)
+    if (timedOut) null else p.exitValue() to out
 } catch (_: Exception) {
     null
 }

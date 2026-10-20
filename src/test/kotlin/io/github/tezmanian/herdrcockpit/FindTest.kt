@@ -33,6 +33,8 @@ class FindTest {
         assertTrue("regex escapes are not capitals", q("/\\S+ed$/").caseless())
         assertFalse(q("/Fail.*/").caseless())
         assertTrue(q("/fail/i").caseless())
+        assertTrue("a path is literal, not /usr/ with flags \"bin\"", q("/usr/bin").matcher("ls /usr/bin").find())
+        assertFalse(q("/usr/bin").matcher("usr").find())
         assertTrue("a bad regex is an error", runCatching { compileQuery("/(/") }.exceptionOrNull() is PatternSyntaxException)
     }
 
@@ -70,6 +72,10 @@ class FindTest {
         assertEquals("past the end of the input is padding", "\u007f".repeat(5), deleteKeys(row, 18, 13, 25))
         assertEquals("right of the cursor: move there first", right.repeat(3) + "\u007f".repeat(2), deleteKeys(row, 2, 3, 4))
         assertNull("only padding selected", deleteKeys(row, 18, 20, 25))
+        val rprompt = "\$ echo hello world" + " ".repeat(20) + "~/proj 12:01"
+        assertEquals("from \"hello\" to the end of the row: not the right prompt", "\u007f".repeat(11), deleteKeys(rprompt, 18, 7, rprompt.length - 1))
+        assertEquals("selected to the end of the row: only the input", "\u007f".repeat(5), deleteKeys(rprompt, 18, 13, rprompt.length - 1))
+        assertNull("Alt+click on the right prompt: already at the end", moveKeys(rprompt, 18, rprompt.length - 3))
         assertEquals("half of a wide character: all of it", left + "\u007f", deleteKeys("a日${DWC}b", 4, 2, 2))
     }
 

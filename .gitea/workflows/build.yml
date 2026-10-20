@@ -71,6 +71,7 @@ jobs:
           API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
+          [ "v$(sed -n 's/^version *= *//p' gradle.properties)" = "$TAG" ] || { echo "tag $TAG doesn't match the version in gradle.properties"; exit 1; }
           ZIP=$(ls build/distributions/*.zip)
           ID=$(curl -sSf -X POST -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
             -d "{\"tag_name\":\"$TAG\",\"name\":\"$TAG\"}" "$API/releases" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)

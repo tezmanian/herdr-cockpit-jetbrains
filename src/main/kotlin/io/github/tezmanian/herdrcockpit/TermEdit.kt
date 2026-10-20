@@ -11,6 +11,16 @@ private const val ESC = "\u001b"
 const val DWC = ''
 
 private fun lastText(row: String) = row.indexOfLast { it != DWC && !it.isWhitespace() }
+/**
+ * The last cell of the input the cursor is in: up to a gap of 2+ spaces after the cursor, so a right prompt
+ * (zsh RPROMPT, powerlevel10k) isn't taken for input.
+ */
+// shortcut: two spaces after the cursor inside the typed command end the input there too; fine for deleting less
+// than asked, upgrade if Herdr ever reports the input's extent
+private fun inputEnd(row: String, cursorX: Int): Int {
+    val gap = row.indexOf("  ", maxOf(0, cursorX))
+    return if (gap < 0) lastText(row) else minOf(lastText(row), gap - 1)
+}
 private fun cellWidth(row: String, x: Int) = if (row.getOrNull(x) == DWC) 0 else 1
 private fun chars(row: String, from: Int, to: Int) = (from until to).count { cellWidth(row, it) > 0 }
 
@@ -22,7 +32,7 @@ fun deleteKeys(row: String, cursorX: Int, start: Int, end: Int): String? {
     var s = start
     if (s > 0 && cellWidth(row, s) == 0) s-- // half of a wide character: all of it
     // Past the end of the input is only padding.
-    val e = minOf(end, maxOf(lastText(row), cursorX - 1))
+    val e = minOf(end, maxOf(inputEnd(row, cursorX), cursorX - 1))
     if (e < s) return null
     var after = e + 1
     if (cellWidth(row, after) == 0) after++
@@ -35,7 +45,7 @@ fun deleteKeys(row: String, cursorX: Int, start: Int, end: Int): String? {
 
 /** The arrow keys that move the cursor to cell `x` of its own row (Alt+click), not past the end of the input. */
 fun moveKeys(row: String, cursorX: Int, x: Int): String? {
-    var to = x.coerceAtLeast(0).coerceAtMost(maxOf(lastText(row) + 1, cursorX))
+    var to = x.coerceAtLeast(0).coerceAtMost(maxOf(inputEnd(row, cursorX) + 1, cursorX))
     if (to > 0 && cellWidth(row, to) == 0) to--
     val n = chars(row, minOf(to, cursorX), maxOf(to, cursorX))
     if (n == 0) return null
