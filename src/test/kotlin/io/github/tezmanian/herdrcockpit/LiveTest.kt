@@ -46,6 +46,47 @@ class LiveTest {
     }
 
     @Test
+    fun takenOverPaneStaysVisibleAndFirstKeyTakesItBack() {
+        assumeTrue("HERDR_LIVE_SOCKET not set", socket != null)
+        val client = HerdrClient { socket!! }
+        val pane = normalize(client.request("session.snapshot")).spaces.flatMap { it.panes }.first { !it.isAgent }
+        val events = mutableListOf<String>()
+        val tty = HerdrTtyConnector(findTool("herdr"), pane.id, herdrEnv(socket), "test") { synchronized(events) { events += it } }
+        tty.resize(com.jediterm.core.util.TermSize(100, 30))
+        val seen = StringBuilder()
+        Thread {
+            val buf = CharArray(4096)
+            while (true) {
+                val n = runCatching { tty.read(buf, 0, buf.size) }.getOrDefault(-1)
+                if (n < 0) break
+                synchronized(seen) { seen.append(buf, 0, n) }
+            }
+        }.apply { isDaemon = true; start() }
+        fun until(what: String, ok: () -> Boolean) {
+            val deadline = System.currentTimeMillis() + 5000
+            while (System.currentTimeMillis() < deadline && !ok()) Thread.sleep(100)
+            assertTrue(what, ok())
+        }
+        Thread.sleep(800)
+        // Another client takes the pane over.
+        val other = ProcessBuilder(findTool("herdr"), "terminal", "session", "control", pane.id, "--takeover", "--cols", "80", "--rows", "20")
+            .apply { environment().clear(); environment().putAll(herdrEnv(socket)) }.start()
+        try {
+            until("the tab observes instead of ending") { tty.observing }
+            until("the note is drawn") { synchronized(seen) { "type here to take it back" in seen } }
+            assertTrue("not ended", !tty.isEnded)
+            tty.write("q") // takes control back, isn't typed
+            until("control is back") { !tty.observing }
+            Thread.sleep(500)
+            tty.write("echo hc-back-\$((6*7))\r")
+            until("typing works again") { synchronized(seen) { "hc-back-42" in seen } }
+        } finally {
+            other.destroy()
+            tty.close()
+        }
+    }
+
+    @Test
     fun createSpaceTabAndWorktree() {
         assumeTrue("HERDR_LIVE_SOCKET not set", socket != null)
         val client = HerdrClient { socket!! }

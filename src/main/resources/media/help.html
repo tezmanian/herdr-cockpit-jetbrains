@@ -291,7 +291,8 @@
       <b>always</b>, closing a tab with its X closes the pane in Herdr too (ask: idle shells right away, agents and busy shells after asking).
       Tabs the plugin closes, and closing the project or the IDE, never close anything in Herdr.</li>
     <li>A pane renamed in Herdr renames its tab here within a few seconds. A pane closed in Herdr closes its tab.</li>
-    <li>If the stream ends (Herdr stopped, another client took the pane over), the tab keeps its last screen with a note. Close it, or click the row to open it again.</li>
+    <li>If another client takes the pane over (VS Code, a second IDE, <code>herdr attach</code>), the tab keeps showing it read-only with a note on the bottom row; selecting and copying still work. <b>The first key you press takes it back</b> and isn't sent to the pane, so it can't answer an agent's question by accident.</li>
+    <li>If the stream ends (Herdr stopped, the pane closed), the tab keeps its last screen with a note. Close it, or click the row to open it again.</li>
     <li><b>Open Herdr TUI</b> (<b>Tools | Herdr</b>, the status bar menu, the disconnected screens) runs Herdr's own full-screen interface in an editor tab, against the same session. Closing that tab ends only that client.</li>
   </ul>
 </section>

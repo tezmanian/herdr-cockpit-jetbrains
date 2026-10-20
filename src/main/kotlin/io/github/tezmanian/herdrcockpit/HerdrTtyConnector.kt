@@ -7,7 +7,10 @@
 //    passed on, so JediTerm keeps its own selection and copy.
 //  - stdin: NDJSON commands: terminal.input {bytes}, terminal.resize {cols, rows} (answered with a full frame),
 //    terminal.scroll {direction, lines}, terminal.release (detach; the program keeps running in Herdr).
-//  - One controller per terminal: --takeover replaces another one.
+//  - One controller per terminal: --takeover replaces another one, which gets terminal.closed with reason
+//    "terminal attach taken over". The tab then keeps showing the pane read-only through
+//    `herdr terminal session observe <pane> --cols --rows` (verified on 0.9.3: same frames, stdin ignored, so a
+//    resize means a new observer) with a note on the bottom row; the first key press takes control back.
 package io.github.tezmanian.herdrcockpit
 
 import com.google.gson.JsonObject
@@ -32,7 +35,7 @@ class HerdrTtyConnector(
     /** The stream ended on its own (Herdr stopped, the pane closed, another client took over). */
     private val onEnded: (String) -> Unit,
 ) : TtyConnector {
-    private var proc: Process? = null
+    @Volatile private var proc: Process? = null
     private var stdin: OutputStream? = null
     private val chunks = LinkedBlockingQueue<CharArray>()
     private var current: CharArray? = null
@@ -46,11 +49,24 @@ class HerdrTtyConnector(
         .onUnmappableCharacter(CodingErrorAction.REPLACE)
     private var pending = ByteBuffer.allocate(0)
 
+    /** Another client controls the pane: this tab only shows it. */
+    @Volatile var observing = false
+        private set
+
     /** Starts the stream on first use (JediTerm resizes, then reads); the deprecated init() isn't needed. */
     @Synchronized
     fun start() {
-        if (proc != null || ended || closedByUser) return
-        val cmd = listOf(binary, "terminal", "session", "control", paneId, "--takeover", "--cols", size.columns.toString(), "--rows", size.rows.toString())
+        if (proc == null) launch(observe = false)
+    }
+
+    /** Starts a controller (taking the pane over) or an observer, replacing the current stream. */
+    @Synchronized
+    private fun launch(observe: Boolean) {
+        if (ended || closedByUser) return
+        proc?.let { old -> proc = null; stdin = null; runCatching { old.outputStream.close() }; old.destroy() }
+        observing = observe
+        val how = if (observe) listOf("observe", paneId) else listOf("control", paneId, "--takeover")
+        val cmd = listOf(binary, "terminal", "session") + how + listOf("--cols", size.columns.toString(), "--rows", size.rows.toString())
         val p = try {
             ProcessBuilder(cmd).apply {
                 environment().clear()
@@ -67,9 +83,10 @@ class HerdrTtyConnector(
         Thread({ runCatching { p.errorStream.bufferedReader().forEachLine { synchronized(stderr) { stderr.append(it).append('\n') } } } }, "herdr-pane-err").apply { isDaemon = true }.start()
         Thread({
             runCatching {
-                p.inputStream.bufferedReader(StandardCharsets.UTF_8).forEachLine { line -> handleLine(line) }
+                p.inputStream.bufferedReader(StandardCharsets.UTF_8).forEachLine { line -> if (p === proc) handleLine(line) }
             }
             val code = runCatching { p.waitFor() }.getOrDefault(-1)
+            if (p !== proc) return@Thread // replaced (taken over, taken back, resized observer)
             val err = synchronized(stderr) { stderr.toString().trim().takeLast(500) }
             finish(if (code != 0) "couldn't stream this pane: ${err.ifEmpty { "herdr exited with $code" }}" else "the stream ended")
         }, "herdr-pane-$paneId").apply { isDaemon = true }.start()
@@ -78,10 +95,16 @@ class HerdrTtyConnector(
     private fun handleLine(line: String) {
         val rec = runCatching { JsonParser.parseString(line.trim()).asJsonObject }.getOrNull() ?: return
         when (rec.get("type")?.asString) {
-            "terminal.frame" -> rec.get("bytes")?.asString?.let { emit(Base64.getDecoder().decode(it)) }
+            "terminal.frame" -> rec.get("bytes")?.asString?.let {
+                emit(Base64.getDecoder().decode(it))
+                if (observing) emit(takenOverNote(size.rows).toByteArray(StandardCharsets.UTF_8))
+            }
             "terminal.closed" -> {
                 val reason = rec.get("reason")?.asString ?: "closed"
-                finish(if (reason == "detached") "detached" else "the stream ended ($reason)")
+                when {
+                    !observing && isTakenOver(reason) -> { onEnded("another client took the pane over; showing it read-only"); launch(observe = true) }
+                    else -> finish(if (reason == "detached") "detached" else "the stream ended ($reason)")
+                }
             }
         }
     }
@@ -141,14 +164,24 @@ class HerdrTtyConnector(
 
     override fun write(bytes: ByteArray) {
         if (bytes.isEmpty()) return
+        // Read-only: the first key takes control back and isn't sent (it could answer an agent's question).
+        if (observing) return takeBack()
         send(JsonObject().apply { addProperty("type", "terminal.input"); addProperty("bytes", Base64.getEncoder().encodeToString(bytes)) })
     }
 
     override fun write(string: String) = write(string.toByteArray(StandardCharsets.UTF_8))
 
+    /** Take control of the pane back from whoever has it. */
+    fun takeBack() {
+        if (!observing) return
+        onEnded("taking control back")
+        launch(observe = false)
+    }
+
     override fun resize(termSize: TermSize) {
         size = termSize
         start()
+        if (observing) return launch(observe = true) // an observer ignores stdin: a new one at the new size
         send(JsonObject().apply {
             addProperty("type", "terminal.resize")
             addProperty("cols", maxOf(1, termSize.columns))
@@ -176,10 +209,10 @@ class HerdrTtyConnector(
 
     override fun getName(): String = displayName
 
-    /** Detach (the program keeps running in Herdr), then stop the helper process. */
+    /** Detach (the program keeps running in Herdr), then stop the helper process. An observer just stops. */
     override fun close() {
         if (closedByUser) return
-        send(JsonObject().apply { addProperty("type", "terminal.release") })
+        if (!observing) send(JsonObject().apply { addProperty("type", "terminal.release") })
         closedByUser = true
         runCatching { stdin?.close() }
         val p = proc
@@ -187,3 +220,9 @@ class HerdrTtyConnector(
         done.countDown()
     }
 }
+
+fun isTakenOver(reason: String?): Boolean = reason != null && Regex("taken over", RegexOption.IGNORE_CASE).containsMatchIn(reason)
+
+/** The bottom-row note while another client has the pane: drawn over the frame, cursor kept where it was. */
+fun takenOverNote(rows: Int): String =
+    "\u001b7\u001b[${maxOf(1, rows)};1H\u001b[0;7m Another Herdr client is using this pane · type here to take it back \u001b[0m\u001b[K\u001b8"
