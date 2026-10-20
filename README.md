@@ -44,6 +44,8 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   of uncommitted changes), "Show Raw" (Herdr's records for it as a read-only JSON tab), and for agents **Hand Off to
   Agent…** (also in the "is done" notification): pick an agent in any space and type what it should do; the prompt
   (`agent.prompt`) adds where the work came from and `herdr agent read <pane>` to read its output.
+- **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
+  or the files go to an agent you pick (the file's space first), with what it should do.
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
   HEAD ↔ working tree diffs in one diff view (step through the files with the arrows). Uses the git CLI, so it also
   works for spaces that aren't mounted; only in trusted projects.

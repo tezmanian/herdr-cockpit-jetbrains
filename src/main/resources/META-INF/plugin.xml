@@ -33,6 +33,10 @@
             <action id="HerdrCockpit.FocusAttention" class="io.github.tezmanian.herdrcockpit.FocusAttentionAction"/>
             <action id="HerdrCockpit.Refresh" class="io.github.tezmanian.herdrcockpit.RefreshAction"/>
             <action id="HerdrCockpit.OpenTui" class="io.github.tezmanian.herdrcockpit.OpenTuiAction"/>
+            <action id="HerdrCockpit.SendToAgent" class="io.github.tezmanian.herdrcockpit.SendToAgentAction">
+                <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+                <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            </action>
             <action id="HerdrCockpit.OpenPaneOutput" class="io.github.tezmanian.herdrcockpit.OpenPaneOutputAction">
                 <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
             </action>

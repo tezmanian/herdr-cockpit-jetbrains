@@ -222,3 +222,32 @@ class OpenTuiAction : DumbAwareAction("Open Herdr TUI", "Run herdr in an editor 
     override fun actionPerformed(e: AnActionEvent) { e.project?.let { HerdrService.getInstance(it).openTui() } }
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
 }
+
+/** The editor's selection (or its line), or files in the project view, to an agent in Herdr with a prompt. */
+class SendToAgentAction : DumbAwareAction("Send to Agent…", "Send the selection or file to an agent in Herdr, with what it should do", AllIcons.Actions.Forward) {
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabledAndVisible = e.project != null && (e.getData(CommonDataKeys.EDITOR) != null || !e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY).isNullOrEmpty())
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        val editor = e.getData(CommonDataKeys.EDITOR)
+        val file = e.getData(CommonDataKeys.VIRTUAL_FILE)
+        val context = if (editor != null && file != null && file.isInLocalFileSystem) {
+            val doc = editor.document
+            val sel = editor.selectionModel
+            val first = doc.getLineNumber(if (sel.hasSelection()) sel.selectionStart else editor.caretModel.offset)
+            // A selection ending at the start of a line doesn't include that line.
+            val end = if (sel.hasSelection()) maxOf(sel.selectionStart, sel.selectionEnd - 1) else editor.caretModel.offset
+            val last = doc.getLineNumber(end)
+            val code = if (sel.hasSelection()) sel.selectedText else null
+            codeContext(file.path, first + 1, last + 1, code, file.extension.orEmpty())
+        } else {
+            e.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY).orEmpty().filter { it.isInLocalFileSystem }.joinToString("") { codeContext(it.path) }
+        }
+        if (context.isEmpty()) return
+        HerdrService.getInstance(project).sendToAgent(context, file?.path)
+    }
+
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+}

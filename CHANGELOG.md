@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.1.10
+- Send to Agent…: right-click in the editor (the selection or the caret's line) or on files in the project view to
+  send them to an agent in Herdr, with what it should do.
 - Pane tab: Ctrl/Cmd+F opens a find bar over the pane's whole history in Herdr. The pane scrolls to each match and
   centers it, matches are highlighted, Enter/↑/F3 go to older and Shift+Enter/↓/Shift+F3 to newer matches, and Tab
   lists every matching line. Smart case; `/regex/` searches with a regular expression.

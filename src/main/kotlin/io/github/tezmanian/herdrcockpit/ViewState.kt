@@ -32,6 +32,20 @@ fun editorTitle(space: Space, tab: Tab?, p: Pane) = "${space.label} · ${paneNam
 fun handoffContext(space: Space, tab: Tab?, p: Pane) =
     "\n\n(Handed off from ${editorTitle(space, tab, p)}${space.cwd?.let { " in $it" } ?: ""}. Read its output with Herdr: `herdr agent read ${p.id} --lines 200`)"
 
+/** Lines of a selection sent to an agent at most; past that only the line range is named. */
+const val SEND_MAX_LINES = 300
+
+/**
+ * What "Send to Agent" starts the prompt with: the file (absolute, the agent may be in another folder) and the
+ * selected lines `first..last` (1-based) in a fenced block, or just the file when nothing is selected.
+ */
+fun codeContext(path: String, first: Int? = null, last: Int? = null, code: String? = null, lang: String = ""): String {
+    if (first == null || last == null) return "`$path`\n\n"
+    val range = if (first == last) "line $first" else "lines $first-$last"
+    if (code == null || code.lines().size > SEND_MAX_LINES) return "`$path` $range\n\n"
+    return "`$path` $range:\n```$lang\n${code.trimEnd('\n')}\n```\n\n"
+}
+
 fun paneName(tab: Tab?, p: Pane): String {
     if (p.isAgent) {
         p.displayAgent?.let { return it }

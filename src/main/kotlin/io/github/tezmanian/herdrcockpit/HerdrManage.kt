@@ -151,14 +151,29 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         val from = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
         val targets = service.currentModel()?.spaces.orEmpty().flatMap { s -> s.agents.filter { it.id != pane.id }.map { s to it } }
         if (targets.isEmpty()) return service.notify("No other agent in Herdr to hand off to.", NotificationType.INFORMATION)
-        choose("Hand off $from to", targets.map { (s, a) ->
+        promptOne("Hand off $from to", targets, "Hand Off to", "", handoffContext(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane))
+    }
+
+    /** Code or files from the IDE to an agent: agents in the space holding `path` first, the dialog starts with `context`. */
+    fun sendToAgent(context: String, path: String?) {
+        if (!connected()) return
+        val spaces = service.currentModel()?.spaces.orEmpty()
+        val targets = spaces.flatMap { s -> s.agents.map { s to it } }
+            .sortedByDescending { (s, _) -> val cwd = s.cwd; path != null && cwd != null && (path == cwd || path.startsWith(cwd.trimEnd('/') + "/")) }
+        if (targets.isEmpty()) return service.notify("No agent in Herdr to send this to.", NotificationType.INFORMATION)
+        promptOne("Send to", targets, "Send to", context, "")
+    }
+
+    /** Pick one of `targets`, write the prompt (starting with `initial`), send it with `suffix` appended. */
+    private fun promptOne(title: String, targets: List<Pair<Space, Pane>>, verb: String, initial: String, suffix: String) {
+        choose(title, targets.map { (s, a) ->
             Item("${editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)} (${a.status ?: AgentStatus.unknown})", null) {
                 val to = editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)
-                val text = Messages.showMultilineInputDialog(project, "What should $to do? A note on where it comes from is added.", "Hand Off to $to", null, null, null)
-                    ?.trim()?.takeIf { it.isNotEmpty() } ?: return@Item
-                run("Hand off to $to") {
+                val text = Messages.showMultilineInputDialog(project, "What should $to do?" + if (suffix.isNotEmpty()) " A note on where it comes from is added." else "", "$verb $to", initial, null, null)
+                    ?.trim()?.takeIf { it.isNotEmpty() && it != initial.trim() } ?: return@Item
+                run("$verb $to") {
                     try {
-                        actions.promptAgent(a.id, text + handoffContext(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane))
+                        actions.promptAgent(a.id, text + suffix)
                     } catch (e: HerdrError) {
                         if (e.code != "agent_blocked") throw e
                         service.notify("$to is waiting for an answer; nothing was sent.", NotificationType.WARNING)

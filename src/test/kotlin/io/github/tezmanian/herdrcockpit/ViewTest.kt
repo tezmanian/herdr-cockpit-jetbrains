@@ -130,6 +130,15 @@ class ViewTest {
     }
 
     @Test
+    fun sendToAgentStartsWithTheFileAndSelection() {
+        assertEquals("`/x/a.php`\n\n", codeContext("/x/a.php"))
+        assertEquals("`/x/a.php` line 3:\n```php\n\$a = 1;\n```\n\n", codeContext("/x/a.php", 3, 3, "\$a = 1;\n", "php"))
+        assertEquals("`/x/a.php` lines 3-4:\n```\na\nb\n```\n\n", codeContext("/x/a.php", 3, 4, "a\nb"))
+        assertEquals("too long: only the range", "`/x/a.php` lines 1-400\n\n", codeContext("/x/a.php", 1, 400, "x\n".repeat(400)))
+        assertEquals("no selection: the caret's line", "`/x/a.php` line 7\n\n", codeContext("/x/a.php", 7, 7))
+    }
+
+    @Test
     fun droppedFilesAreTypedAsPaths() {
         assertEquals("/x/a.php '/x/my file.txt' '/x/it'\\''s' ", dropText(listOf(java.io.File("/x/a.php"), java.io.File("/x/my file.txt"), java.io.File("/x/it's"))))
         assertEquals("@/x/a.php @\"/x/my file.txt\" ", dropText(listOf(java.io.File("/x/a.php"), java.io.File("/x/my file.txt")), claude = true))
