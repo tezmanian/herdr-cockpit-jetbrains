@@ -6,6 +6,8 @@ package io.github.tezmanian.herdrcockpit
 import com.intellij.icons.AllIcons
 import com.intellij.ide.dnd.FileCopyPasteUtil
 import com.intellij.ide.FileIconProvider
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditor
 import com.intellij.openapi.fileEditor.FileEditorPolicy
 import com.intellij.openapi.fileEditor.FileEditorProvider
@@ -171,6 +173,21 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
         })
         widget.start(connector)
         acceptFileDrops(widget) { service.currentModel()?.find(file.paneId)?.second?.agentKind == "claude" }
+    }
+
+    /** The pane's whole history from Herdr as a read-only document, caret at the end. */
+    fun openOutput() {
+        val service = HerdrService.getInstance(project)
+        val cols = widget.terminalTextBuffer.width
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val text = runCatching { service.actions.paneHistory(file.paneId, cols) }.getOrElse {
+                return@executeOnPooledThread service.notify("Couldn't read this pane's output from Herdr: ${it.message}", NotificationType.WARNING)
+            }
+            ApplicationManager.getApplication().invokeLater({
+                val doc = LightVirtualFile("${file.title}.log", PlainTextFileType.INSTANCE, text.trimEnd() + "\n").apply { isWritable = false }
+                OpenFileDescriptor(project, doc, doc.length.toInt()).navigate(true)
+            }, project.disposed)
+        }
     }
 
     override fun getComponent(): JComponent = widget

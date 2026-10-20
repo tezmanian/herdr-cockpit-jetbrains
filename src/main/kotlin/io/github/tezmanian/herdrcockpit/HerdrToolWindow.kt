@@ -8,8 +8,10 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
@@ -204,6 +206,16 @@ class HelpAction : DumbAwareAction("Help", "How to read the Herdr sidebar", AllI
 class FocusAttentionAction : DumbAwareAction("Jump to Agent That Needs You", "Open the blocked or done agent", AllIcons.General.Warning) {
     override fun actionPerformed(e: AnActionEvent) { e.project?.let { HerdrService.getInstance(it).handle("attention", null, null) } }
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
+}
+
+/** A pane tab's whole history as a document (the tab's context menu, Tools | Herdr). */
+class OpenPaneOutputAction : DumbAwareAction("Open Pane Output in Editor", "The pane's whole history from Herdr as a read-only document", AllIcons.Actions.ShowAsTree) {
+    private fun editor(e: AnActionEvent) = e.project?.let { p ->
+        (e.getData(CommonDataKeys.VIRTUAL_FILE) as? HerdrPaneFile)?.let { FileEditorManager.getInstance(p).getEditors(it).firstNotNullOfOrNull { ed -> ed as? HerdrPaneEditor } }
+    }
+    override fun update(e: AnActionEvent) { e.presentation.isEnabledAndVisible = editor(e) != null }
+    override fun actionPerformed(e: AnActionEvent) { editor(e)?.openOutput() }
+    override fun getActionUpdateThread() = ActionUpdateThread.EDT
 }
 
 class OpenTuiAction : DumbAwareAction("Open Herdr TUI", "Run herdr in an editor tab", AllIcons.Nodes.Console) {

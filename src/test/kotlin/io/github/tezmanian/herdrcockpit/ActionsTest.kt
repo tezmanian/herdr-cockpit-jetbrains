@@ -133,6 +133,20 @@ class ActionsTest {
     }
 
     @Test
+    fun paneHistoryReadsFromTheTopToTheLastRow() {
+        serve { m, p ->
+            when {
+                m == "pane.get" -> """{"pane":{"scroll":{"offset_from_bottom":0,"max_offset_from_bottom":262,"viewport_rows":40}}}"""
+                p.getAsJsonObject("cursor").get("col").asInt > 0 -> "!selection_unavailable"
+                else -> """{"text":"1\n2"}"""
+            }
+        }
+        assertEquals("1\n2", actions.paneHistory("w9:p1", 80))
+        assertEquals("""{"pane_id":"w9:p1","anchor":{"row":0,"col":0},"cursor":{"row":301,"col":79}}""", params(1).toString())
+        assertEquals("falls back to column 0", 0, params(2).getAsJsonObject("cursor").get("col").asInt)
+    }
+
+    @Test
     fun startAgentRetriesWhilePaneIsBusy() {
         var calls = 0
         serve { _, _ -> if (++calls < 3) "!agent_pane_busy" else """{"agent":{"pane_id":"w1:p7"}}""" }

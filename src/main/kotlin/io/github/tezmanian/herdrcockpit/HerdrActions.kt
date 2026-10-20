@@ -71,6 +71,21 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
         created(client.request("workspace.create", params("cwd" to cwd, "label" to label), 5000))
 
     /** Focuses space `workspaceId` in Herdr's own view (what the TUI shows). */
+    /** Everything Herdr keeps for a pane (scrollback and screen) as text. `cols` is the pane's width. */
+    fun paneHistory(paneId: String, cols: Int): String {
+        val scroll = client.request("pane.get", JsonObject().apply { addProperty("pane_id", paneId) }, 5000).getAsJsonObject("pane")?.getAsJsonObject("scroll")
+            ?: throw HerdrError("bad_response", "Herdr gave no scroll position for this pane")
+        val last = scroll.get("max_offset_from_bottom").asInt + scroll.get("viewport_rows").asInt - 1
+        fun at(row: Int, col: Int) = JsonObject().apply { addProperty("row", row); addProperty("col", col) }
+        fun read(col: Int) = client.request("pane.selection.read", JsonObject().apply {
+            addProperty("pane_id", paneId)
+            add("anchor", at(0, 0))
+            add("cursor", at(last, col))
+        }, 30_000).get("text").asString
+        // Herdr refuses a column past the pane's width: a narrower pane than the tab drops the last row's tail.
+        return runCatching { read(cols - 1) }.getOrElse { read(0) }
+    }
+
     fun focusSpace(workspaceId: String) {
         client.request("workspace.focus", JsonObject().apply { addProperty("workspace_id", workspaceId) }, 5000)
     }
