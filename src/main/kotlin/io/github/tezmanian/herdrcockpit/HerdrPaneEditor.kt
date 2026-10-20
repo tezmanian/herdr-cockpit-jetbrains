@@ -49,6 +49,8 @@ import javax.swing.TransferHandler
 class HerdrPaneFile(val paneId: String, val spaceId: String, var title: String, val agent: Boolean) :
     LightVirtualFile(title, PlainTextFileType.INSTANCE, "") {
     @Volatile var connector: HerdrTtyConnector? = null
+    /** Opened by following Herdr: watch a pane another window holds instead of taking it. */
+    var polite = false
 
     init {
         isWritable = false
@@ -145,7 +147,7 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
 
     init {
         val service = HerdrService.getInstance(project)
-        val connector = HerdrTtyConnector(service.binary(), file.paneId, service.herdrEnvNow(), file.title) { why ->
+        val connector = HerdrTtyConnector(service.binary(), file.paneId, service.herdrEnvNow(), file.title, service.paneHooks(file.paneId), file.polite) { why ->
             service.log("pane ${file.paneId}: $why")
             service.scheduleRender()
         }

@@ -291,7 +291,7 @@
       <b>always</b>, closing a tab with its X closes the pane in Herdr too (ask: idle shells right away, agents and busy shells after asking).
       Tabs the plugin closes, and closing the project or the IDE, never close anything in Herdr.</li>
     <li>A pane renamed in Herdr renames its tab here within a few seconds. A pane closed in Herdr closes its tab.</li>
-    <li>If another client takes the pane over (VS Code, a second IDE, <code>herdr attach</code>), the tab keeps showing it read-only with a note on the bottom row; selecting and copying still work. <b>The first key you press takes it back</b> and isn't sent to the pane, so it can't answer an agent's question by accident.</li>
+    <li>If another client takes the pane over (VS Code, a second IDE, <code>herdr attach</code>), the tab keeps showing it read-only with a note on the bottom row; selecting and copying still work. <b>The first key you press takes it back</b> and isn't sent to the pane, so it can't answer an agent's question by accident. A notification names the panes and who took them (another IDE window or VS Code with Herdr Cockpit say so in <code>~/.herdr-cockpit/claims</code>; anyone else is "another Herdr client") and offers <b>Take Back</b>. When this window follows Herdr to a space, a pane another window holds stays there and is only shown here.</li>
     <li>If the stream ends (Herdr stopped, the pane closed), the tab keeps its last screen with a note. Close it, or click the row to open it again.</li>
     <li><b>Open Herdr TUI</b> (<b>Tools | Herdr</b>, the status bar menu, the disconnected screens) runs Herdr's own full-screen interface in an editor tab, against the same session. Closing that tab ends only that client.</li>
   </ul>
@@ -394,6 +394,7 @@
     <tr><td>Order of spaces<div class="def">default: activity</div></td><td><b>activity</b>: spaces with an agent working or waiting on you first, then the most recently active. <b>herdr</b>: Herdr's order.</td></tr>
     <tr><td>Show shell panes<div class="def">default: on</div></td><td>Shell rows in the sidebar (also the <span class="codicon codicon-terminal"></span> toggle).</td></tr>
     <tr><td>Notify when an agent is blocked / done<div class="def">default: on / on</div></td><td>Notifications on these transitions.</td></tr>
+    <tr><td>Notify when another client takes a pane over<div class="def">default: on</div></td><td>Names the panes and who took them, with <b>Take Back</b>.</td></tr>
     <tr><td>Kiro monthly credits<div class="def">default: 0</div></td><td>Your Kiro plan's allowance; 0 hides the bar.</td></tr>
     <tr><td>Closing a pane's tab yourself<div class="def">default: never</div></td><td>never: only detaches. ask: closes idle shells in Herdr too, asks for agents and busy shells. always: closes it in Herdr. The last pane of a space always asks.</td></tr>
     <tr><td>Agents<div class="def">default: claude, codex, kiro, cursor</div></td><td>Listed first when you create a tab; the rest are under "More agents…".</td></tr>

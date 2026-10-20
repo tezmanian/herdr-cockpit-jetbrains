@@ -39,6 +39,8 @@ class HerdrSettingsState : BaseState() {
     var showShells by property(true)
     var notifyBlocked by property(true)
     var notifyDone by property(true)
+    /** Say when another client (VS Code, another window, `herdr attach`) took over panes this window shows. */
+    var notifyOnTakeover by property(true)
     /** Agents offered first for a new tab (any kind `herdr agent start --kind` accepts). */
     var agents by string("claude, codex, kiro, cursor")
     /** Closing a pane's editor tab yourself: "never" only detaches, "ask" closes idle shells in Herdr and asks for the rest, "always" closes it. */
@@ -90,6 +92,7 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row { checkBox("Show shell panes").bindSelected(s::showShells) }
                 row { checkBox("Notify when an agent is blocked").bindSelected(s::notifyBlocked) }
                 row { checkBox("Notify when an agent is done").bindSelected(s::notifyDone) }
+                row { checkBox("Notify when another client takes a pane over").bindSelected(s::notifyOnTakeover) }
             }
             group("Usage") {
                 row("Kiro monthly credits:") {

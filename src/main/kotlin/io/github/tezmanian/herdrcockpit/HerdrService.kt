@@ -16,6 +16,7 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
@@ -108,6 +109,7 @@ class HerdrService(private val project: Project) : Disposable {
     private var codexLiveAt = 0L
 
     init {
+        loop.execute { guard { claims.prune() } }
         loop.scheduleWithFixedDelay({ guard { tick() } }, 0, 1500, TimeUnit.MILLISECONDS)
         activityExec.scheduleWithFixedDelay({ guard { pollActivity() } }, 2, 4, TimeUnit.SECONDS)
         loop.scheduleWithFixedDelay({ guard { if (model != null) render() } }, 15, 15, TimeUnit.SECONDS)
@@ -311,6 +313,50 @@ class HerdrService(private val project: Project) : Disposable {
         if (runningKinds(prev) != runningKinds(next)) pollUsageNow()
     }
 
+    // ---------- another client took a pane over ----------
+    private val claims by lazy { Claims() } // lazy: init {} runs before this line
+    private val me get() = PaneClaim(ApplicationNamesInfo.getInstance().fullProductName, "jetbrains", ProcessHandle.current().pid(), System.currentTimeMillis())
+
+    fun paneHooks(paneId: String) = object : PaneHooks {
+        override fun claim() = claims.write(socketPath(), paneId, me, this@HerdrService)
+        override fun unclaim() = claims.remove(socketPath(), paneId, me.pid, this@HerdrService)
+        override fun holder(since: Long) = claims.holder(socketPath(), paneId, me, this@HerdrService, since)
+        override fun lost(who: String?) = tookOver(paneId, who)
+    }
+
+    private val takenOver = ConcurrentHashMap<String, String>()
+    private var takenOverTimer: ScheduledFuture<*>? = null
+
+    /** Say so once for the panes lost together (a space switch in another window takes all of them). */
+    private fun tookOver(paneId: String, who: String?) {
+        if (!settings.notifyOnTakeover) return
+        takenOver[paneId] = who ?: "another Herdr client"
+        takenOverTimer?.cancel(false)
+        takenOverTimer = loop.schedule({ guard { showTakenOver() } }, 600, TimeUnit.MILLISECONDS)
+    }
+
+    private fun showTakenOver() {
+        val lost = takenOver.toMap()
+        takenOver.keys.removeAll(lost.keys)
+        if (lost.isEmpty()) return
+        val who = lost.values.toSet().singleOrNull() ?: "other Herdr clients"
+        val names = lost.keys.map { files[it]?.title ?: it }
+        val list = when {
+            names.size == 1 -> names[0]
+            names.size <= 3 -> names.dropLast(1).joinToString(", ") + " and " + names.last()
+            else -> names.take(2).joinToString(", ") + " and ${names.size - 2} more"
+        }
+        val one = names.size == 1
+        val text = "${who.replaceFirstChar { it.uppercase() }} took over the Herdr ${if (one) "pane" else "panes"} $list. " +
+            "${if (one) "Its tab shows it" else "Their tabs show them"} read-only here; type in a tab to take it back."
+        edt {
+            NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit").createNotification(text, NotificationType.WARNING)
+                .addAction(NotificationAction.createSimpleExpiring("Take Back") { lost.keys.forEach { files[it]?.connector?.takeBack() } })
+                .addAction(NotificationAction.createSimpleExpiring("Don't Show Again") { settings.notifyOnTakeover = false })
+                .notify(project)
+        }
+    }
+
     private fun notifyTransition(space: Space, agent: Pane) {
         val st = agent.status ?: return
         if (st == AgentStatus.blocked && !settings.notifyBlocked) return
@@ -511,8 +557,9 @@ class HerdrService(private val project: Project) : Disposable {
             }
             if (autoAttach) {
                 val panes = attachOrder(space, settings.autoAttachShells)
-                for (p in panes) openTab(space, p, focus = false)
-                panes.firstOrNull()?.let { openTab(space, it, focus = true) }
+                // Following Herdr: a pane another window holds stays there (shown read-only), it isn't taken.
+                for (p in panes) openTab(space, p, focus = false, polite = fromHerdr)
+                panes.firstOrNull()?.let { openTab(space, it, focus = true, polite = fromHerdr) }
             }
         } finally {
             switching = false
@@ -526,7 +573,7 @@ class HerdrService(private val project: Project) : Disposable {
         if (pane.isAgent) loop.execute { runCatching { client.request("agent.focus", JsonObject().apply { addProperty("target", pane.id) }) } }
     }
 
-    private fun openTab(space: Space, pane: Pane, focus: Boolean) {
+    private fun openTab(space: Space, pane: Pane, focus: Boolean, polite: Boolean = false) {
         val fem = FileEditorManager.getInstance(project)
         var f = files[pane.id]
         if (f != null && (f.ended || !fem.isFileOpen(f))) {
@@ -535,7 +582,7 @@ class HerdrService(private val project: Project) : Disposable {
             f = null
         }
         if (f == null) {
-            f = HerdrPaneFile(pane.id, space.id, editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.isAgent)
+            f = HerdrPaneFile(pane.id, space.id, editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.isAgent).also { it.polite = polite }
             files[pane.id] = f
         }
         fem.openFile(f, focus)

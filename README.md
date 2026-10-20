@@ -26,7 +26,9 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   scrollback. File paths a program prints (`src/app.ts:42`) are links to the file at that line. *Open Pane Output in
   Editor* (tab context menu, *Tools | Herdr*) shows the pane's whole history as a read-only document. When another
   client takes the pane over, the tab keeps showing it read-only (`herdr terminal session observe`); the first key
-  takes it back. Closing a tab only detaches; the program keeps running in Herdr.
+  takes it back, and a notification offers *Take Back*. Windows record the panes they take in
+  `~/.herdr-cockpit/claims` (the same files as the VS Code extension), so the notification can say who took it, and a
+  window that follows Herdr leaves a pane another window holds where it is. Closing a tab only detaches; the program keeps running in Herdr.
 - Live updates via `events.subscribe` (re-snapshot on every event, 5 s safety poll), notifications when an agent is
   blocked or done, follow mode (Herdr's focus moves → the IDE follows, in projects you switched from the IDE).
 - **New space** (`+` next to "Spaces"): in one of the window's projects (attached ones too), a folder you pick, or on a new git worktree (and branch) of an existing
@@ -114,7 +116,9 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `ViewState.kt` | JSON for `media/panel.js` (same shape as the VS Code extension's `viewState.ts`) |
 | `HerdrService.kt` | per-project sync loop, connection states, switching, mounting, notifications |
 | `HerdrToolWindow.kt` | JCEF tool window, `acquireVsCodeApi()` shim, theme → `--vscode-*` variables, actions |
-| `HerdrPaneEditor.kt`, `HerdrTtyConnector.kt` | pane editor tabs: JBTerminalWidget + TtyConnector over `terminal session control`; the Herdr TUI tab (pty4j) |
+| `HerdrPaneEditor.kt`, `HerdrTtyConnector.kt` | pane editor tabs: JBTerminalWidget + TtyConnector over `terminal session control` (`observe` while another client has it); the Herdr TUI tab (pty4j) |
+| `TermLinks.kt` | file paths in pane output as links (port of `termLinks.ts`) |
+| `Claims.kt` | `~/.herdr-cockpit/claims`: which window took a pane (shared with the VS Code extension) |
 | `HerdrManage.kt` | dialogs and popups: new space/tab, rename, close, review, context menu, Show Raw, usage setup |
 | `HerdrStatusBar.kt` | status bar widget and tool window badge |
 | `HerdrHelp.kt` | help page (`media/help.html`) in a JCEF editor tab |

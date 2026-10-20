@@ -27,12 +27,27 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
+/** Who holds a pane (Claims.kt), as the tab needs it. */
+interface PaneHooks {
+    /** This tab is taking control: record it, so the window that loses it can say who has it. */
+    fun claim()
+    /** This tab gave the pane up (closed, or lost it). */
+    fun unclaim()
+    /** Who has the pane now, if another window says so; `since` = when this tab took it. */
+    fun holder(since: Long): String?
+    /** Another client took the pane over; the tab now shows it read-only. */
+    fun lost(who: String?)
+}
+
 class HerdrTtyConnector(
     private val binary: String,
     private val paneId: String,
     private val env: Map<String, String>,
     private val displayName: String,
-    /** The stream ended on its own (Herdr stopped, the pane closed, another client took over). */
+    private val hooks: PaneHooks? = null,
+    /** Opened by following Herdr: if another window holds the pane, only watch it instead of taking it. */
+    private val polite: Boolean = false,
+    /** The stream ended on its own (Herdr stopped, the pane closed), or changed hands. */
     private val onEnded: (String) -> Unit,
 ) : TtyConnector {
     @Volatile private var proc: Process? = null
@@ -53,10 +68,17 @@ class HerdrTtyConnector(
     @Volatile var observing = false
         private set
 
+    /** Who has the pane while observing (null: a client that didn't say). */
+    @Volatile private var holderName: String? = null
+    private var controlSince = 0L
+
     /** Starts the stream on first use (JediTerm resizes, then reads); the deprecated init() isn't needed. */
     @Synchronized
     fun start() {
-        if (proc == null) launch(observe = false)
+        if (proc != null) return
+        holderName = if (polite) hooks?.holder(0) else null
+        if (holderName != null) onEnded("$holderName has it; showing it read-only")
+        launch(observe = holderName != null)
     }
 
     /** Starts a controller (taking the pane over) or an observer, replacing the current stream. */
@@ -65,6 +87,11 @@ class HerdrTtyConnector(
         if (ended || closedByUser) return
         proc?.let { old -> proc = null; stdin = null; runCatching { old.outputStream.close() }; old.destroy() }
         observing = observe
+        if (!observe) {
+            // Before Herdr hands it over, so the window losing it can read who took it.
+            controlSince = System.currentTimeMillis()
+            hooks?.claim()
+        }
         val how = if (observe) listOf("observe", paneId) else listOf("control", paneId, "--takeover")
         val cmd = listOf(binary, "terminal", "session") + how + listOf("--cols", size.columns.toString(), "--rows", size.rows.toString())
         val p = try {
@@ -97,12 +124,18 @@ class HerdrTtyConnector(
         when (rec.get("type")?.asString) {
             "terminal.frame" -> rec.get("bytes")?.asString?.let {
                 emit(Base64.getDecoder().decode(it))
-                if (observing) emit(takenOverNote(size.rows).toByteArray(StandardCharsets.UTF_8))
+                if (observing) emit(takenOverNote(size.rows, holderName).toByteArray(StandardCharsets.UTF_8))
             }
             "terminal.closed" -> {
                 val reason = rec.get("reason")?.asString ?: "closed"
                 when {
-                    !observing && isTakenOver(reason) -> { onEnded("another client took the pane over; showing it read-only"); launch(observe = true) }
+                    !observing && isTakenOver(reason) -> {
+                        hooks?.unclaim()
+                        holderName = hooks?.holder(controlSince)
+                        onEnded("${holderName ?: "another client"} took the pane over; showing it read-only")
+                        hooks?.lost(holderName)
+                        launch(observe = true)
+                    }
                     else -> finish(if (reason == "detached") "detached" else "the stream ended ($reason)")
                 }
             }
@@ -124,6 +157,7 @@ class HerdrTtyConnector(
     private fun finish(why: String) {
         if (ended) return
         ended = true
+        if (!observing) hooks?.unclaim()
         if (!closedByUser) {
             chunks.put("\u001b[0m\r\n\u001b[2m[Herdr Cockpit] $why. Close this tab, or click the pane in the Herdr sidebar to open it again.\u001b[0m\r\n".toCharArray())
             onEnded(why)
@@ -174,7 +208,8 @@ class HerdrTtyConnector(
     /** Take control of the pane back from whoever has it. */
     fun takeBack() {
         if (!observing) return
-        onEnded("taking control back")
+        onEnded("taking control back${holderName?.let { " from $it" } ?: ""}")
+        holderName = null
         launch(observe = false)
     }
 
@@ -212,7 +247,10 @@ class HerdrTtyConnector(
     /** Detach (the program keeps running in Herdr), then stop the helper process. An observer just stops. */
     override fun close() {
         if (closedByUser) return
-        if (!observing) send(JsonObject().apply { addProperty("type", "terminal.release") })
+        if (!observing) {
+            send(JsonObject().apply { addProperty("type", "terminal.release") })
+            hooks?.unclaim()
+        }
         closedByUser = true
         runCatching { stdin?.close() }
         val p = proc
@@ -224,5 +262,7 @@ class HerdrTtyConnector(
 fun isTakenOver(reason: String?): Boolean = reason != null && Regex("taken over", RegexOption.IGNORE_CASE).containsMatchIn(reason)
 
 /** The bottom-row note while another client has the pane: drawn over the frame, cursor kept where it was. */
-fun takenOverNote(rows: Int): String =
-    "\u001b7\u001b[${maxOf(1, rows)};1H\u001b[0;7m Another Herdr client is using this pane · type here to take it back \u001b[0m\u001b[K\u001b8"
+fun takenOverNote(rows: Int, who: String? = null): String {
+    val w = who ?: "another Herdr client"
+    return "\u001b7\u001b[${maxOf(1, rows)};1H\u001b[0;7m ${w.replaceFirstChar { it.uppercase() }} is using this pane · type here to take it back \u001b[0m\u001b[K\u001b8"
+}
