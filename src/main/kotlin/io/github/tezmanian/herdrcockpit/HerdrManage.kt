@@ -17,6 +17,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
@@ -31,6 +32,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.awt.RelativePoint
 import java.awt.MouseInfo
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import javax.swing.Icon
 
 /** What a new tab runs: a plain shell, or an agent kind ("claude", "codex", ...). */
@@ -137,6 +139,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
                 add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
             }
             if (pane == null || pane.isAgent) add(Item("Review Changes", AllIcons.Actions.Diff) { review(space, pane) })
+            if (pane?.isAgent == true) add(Item("Review Branch with Agent…", AllIcons.Actions.Preview) { reviewBranch(space, pane) })
             if (pane?.isAgent == true) add(Item("Hand Off to Agent…", AllIcons.Actions.Forward) { handOff(space, pane) })
             if (pane?.agentKind == "claude") add(Item("Switch Claude Session…", AllIcons.Vcs.History) { switchClaudeSession(space, pane) })
             add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
@@ -329,6 +332,67 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
             val chain = SimpleDiffRequestChain.fromProducers(changes.map { diffOf(root, it) })
             later { DiffManager.getInstance().showDiff(project, chain, DiffDialogHints.DEFAULT) }
         }
+    }
+
+    private class PendingReview(val root: String, val out: File, val since: Long)
+    private val reviews = ConcurrentHashMap<String, PendingReview>()
+
+    /** Asks the agent to review its folder's branch against a target and write findings to a file; nothing is posted. */
+    fun reviewBranch(space: Space, pane: Pane) {
+        val cwd = pane.cwd ?: space.cwd ?: return service.notify("No folder known for ${space.label}.", NotificationType.WARNING)
+        if (!TrustedProjects.isProjectTrusted(project)) return service.notify("Review needs a trusted project (git isn't run in untrusted ones).", NotificationType.WARNING)
+        val name = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
+        run("Review branch with $name") {
+            val root = gitRoot(cwd) ?: return@run service.notify("$cwd is not inside a git repository.", NotificationType.INFORMATION)
+            val branch = gitBranch(root) ?: return@run service.notify("${File(root).name} is not on a branch.", NotificationType.INFORMATION)
+            val default = gitDefaultBranch(root) ?: "main"
+            later {
+                val target = input("Review $branch with $name", "Compare $branch against (branch or ref):", default) {
+                    if (!isValidBranch(it)) "Not a valid branch name" else null
+                } ?: return@later
+                val out = reviewFile(File(System.getProperty("user.home")), space.label, branch)
+                run("Review branch with $name") {
+                    out.parentFile.mkdirs()
+                    out.delete()
+                    reviews[pane.id] = PendingReview(root, out, System.currentTimeMillis())
+                    try {
+                        actions.promptAgent(pane.id, reviewPrompt(root, branch, target, out))
+                    } catch (e: HerdrError) {
+                        reviews.remove(pane.id)
+                        if (e.code != "agent_blocked") throw e
+                        service.notify("$name is waiting for an answer; nothing was sent.", NotificationType.WARNING)
+                    }
+                }
+            }
+        }
+    }
+
+    /** An agent stopped working: if it owes a review and has written the file, offer its findings. */
+    fun agentSettled(space: Space, pane: Pane) {
+        val r = reviews[pane.id] ?: return
+        if (!r.out.isFile || r.out.lastModified() < r.since) return
+        reviews.remove(pane.id)
+        val name = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
+        val findings = parseReview(r.out.readText(), File(r.root))
+            ?: return service.notify("$name's review in ${r.out} isn't a JSON array of findings.", NotificationType.WARNING)
+        if (findings.isEmpty()) return service.notify("$name's review: no findings.", NotificationType.INFORMATION)
+        later {
+            com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
+                .createNotification("$name's review: ${findings.size} finding${if (findings.size > 1) "s" else ""}", NotificationType.INFORMATION)
+                .addAction(com.intellij.notification.NotificationAction.createSimple("Show") { showFindings(name, r.root, findings) })
+                .notify(project)
+        }
+    }
+
+    private fun showFindings(name: String, root: String, findings: List<Finding>) {
+        choose("Review by $name", findings.map { f ->
+            Item("${f.path}:${f.line}  ${f.body.lineSequence().first().take(120)}", null) {
+                val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath("$root/${f.path}")
+                    ?: return@Item service.notify("${f.path} doesn't exist (any more).", NotificationType.WARNING)
+                OpenFileDescriptor(project, vf, f.line - 1, 0).navigate(true)
+                service.notify("${f.path}:${f.line}: ${f.body}", NotificationType.INFORMATION)
+            }
+        })
     }
 
     /** One file's diff, built when the diff viewer gets to it (off the EDT). */

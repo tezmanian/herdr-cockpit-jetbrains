@@ -171,3 +171,6 @@ fun gitRoot(cwd: String): String? = run(cwd, listOf("rev-parse", "--show-topleve
 fun gitChanges(root: String): List<GitChange>? = run(root, listOf("status", "--porcelain=v1", "-z", "--untracked-files=all"))?.let(::parseChanges)
 /** The file at HEAD (shortcut: decoded as UTF-8 text, so binary files diff as garbage); null if it isn't in HEAD. */
 fun gitShowHead(root: String, path: String): String? = run(root, listOf("show", "HEAD:$path"))
+fun gitBranch(root: String): String? = run(root, listOf("symbolic-ref", "--short", "-q", "HEAD"))?.trim()?.ifEmpty { null }
+/** The remote's default branch ("origin/main"), if the clone recorded it. */
+fun gitDefaultBranch(root: String): String? = run(root, listOf("symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"))?.trim()?.ifEmpty { null }

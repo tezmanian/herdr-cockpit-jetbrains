@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.13
+- Review Branch with Agent…: right-click an agent to have it review its folder's branch against another branch
+  (`git diff <target>...HEAD`). It writes its findings to `~/.herdr-cockpit/reviews/`, nothing is posted; when it's
+  done, a notification lists them and each one opens the file at its line.
+
 ## 0.1.12
 - Switch Claude Session…: right-click a Claude agent to start a new session (`/clear`) or resume one of Claude Code's
   saved sessions for its folder.

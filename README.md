@@ -46,6 +46,10 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   (`agent.prompt`) adds where the work came from and `herdr agent read <pane>` to read its output. For Claude agents,
   **Switch Claude Session…** starts a new session (`/clear`) or resumes one of Claude Code's saved sessions for the
   agent's folder (`/resume <id>`, newest first, with their titles).
+- **Review Branch with Agent…** (right-click an agent): the agent reviews its folder's branch against a branch you
+  pick (`git diff <target>...HEAD`) and writes its findings as JSON to `~/.herdr-cockpit/reviews/`. Nothing is posted
+  to GitLab or anywhere else. When it's done, a notification lists the findings; each opens the file at its line.
+  Findings pointing outside the repository are dropped. Only in trusted projects.
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
   or the files go to an agent you pick (the file's space first), with what it should do.
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
@@ -127,6 +131,7 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `Connection.kt` | finding `herdr`, `diagnose()`, `startServer()` (detached, clean env), backoff |
 | `Activity.kt` | shell/agent summaries from `pane.process_info` + `pane.read` |
 | `Usage.kt` | plan usage of Claude Code, Codex and Kiro from their local files (port of `usage.ts`) |
+| `AgentReview.kt` | "Review Branch with Agent…": the prompt and the findings file (`parseReview()` checks the agent's output) |
 | `ClaudeSessions.kt` | Claude Code's saved sessions for a folder, for "Switch Claude Session…" |
 | `GitInfo.kt` | git CLI with the upstream's hardening (no fsmonitor, filters, hooks, lazy fetch); skipped in untrusted projects |
 | `ViewState.kt` | JSON for `media/panel.js` (same shape as the VS Code extension's `viewState.ts`) |

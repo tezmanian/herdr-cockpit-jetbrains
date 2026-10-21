@@ -283,6 +283,7 @@ class HerdrService(private val project: Project) : Disposable {
             }
             val before = lastStatus[a.id]
             if (!firstLoad && before != null && a.status != null && before != a.status) notifyTransition(sp, a)
+            if (before == AgentStatus.working && a.status != AgentStatus.working) manage.agentSettled(sp, a)
             lastStatus[a.id] = a.status
         }
         lastStatus.keys.retainAll(seen)
