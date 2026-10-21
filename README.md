@@ -53,6 +53,8 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   With the GitLab plugin, **Review with Agent…** is also in the context menu of a merge request's changes in the GitLab
   tool window: the agent reviews those files between the merge request's commits, without checking out its branch.
   Both ask for optional extra instructions first.
+- **Saved prompts** (setting "Prompts", one `category: text` per line): the prompt dialogs offer them as presets that
+  fill the text: `review` in the reviews, `general` in Send to Agent… and Hand Off to Agent….
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
   or the files go to an agent you pick (the file's space first), with what it should do.
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
@@ -80,7 +82,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 - Optional: closing a pane's editor tab yourself also closes it in Herdr (setting "Closing a pane's tab yourself":
   never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
 - Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, a space per project, switching behaviour, space order, notifications, agents offered
-  for new tabs, closing tabs, Kiro monthly credits).
+  for new tabs, closing tabs, Kiro monthly credits, saved prompts).
 
 ## Issues
 

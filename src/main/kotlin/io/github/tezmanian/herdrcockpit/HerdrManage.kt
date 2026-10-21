@@ -21,7 +21,9 @@ import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.InputValidatorEx
+import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.ListSeparator
@@ -30,6 +32,9 @@ import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.util.UserDataHolder
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.awt.RelativePoint
+import com.intellij.ui.components.JBTextArea
+import com.intellij.ui.dsl.builder.Align
+import com.intellij.ui.dsl.builder.panel
 import java.awt.MouseInfo
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -191,13 +196,8 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         choose(title, targets.map { (s, a) ->
             Item("${editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)} (${a.status ?: AgentStatus.unknown})", null) {
                 val to = editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)
-                val text = Messages.showMultilineInputDialog(project, "What should $to do?" + if (suffix.isNotEmpty()) " A note on where it comes from is added." else "", "$verb $to", initial, null, object : InputValidatorEx {
-                    // OK stays off until there's something to send beyond the prefilled code.
-                    override fun getErrorText(t: String?) = if (t.isNullOrBlank() || t.trim() == initial.trim()) "Write what $to should do" else null
-                    override fun checkInput(t: String?) = getErrorText(t) == null
-                    override fun canClose(t: String?) = checkInput(t)
-                })
-                    ?.trim()?.takeIf { it.isNotEmpty() && it != initial.trim() } ?: return@Item
+                val text = promptDialog("$verb $to", "What should $to do?" + if (suffix.isNotEmpty()) " A note on where it comes from is added." else "", "general", initial, "Write what $to should do")
+                    ?.takeIf { it.isNotEmpty() && it != initial.trim() } ?: return@Item
                 prompt("$verb $to", to, a.id, text + suffix)
             }
         })
@@ -384,7 +384,33 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
 
     /** Optional extra instructions for the review ("" when left empty); null when cancelled. */
     private fun reviewInstructions(name: String): String? =
-        Messages.showMultilineInputDialog(project, "Anything $name should look at in particular? (optional, e.g. \"focus on security\")", "Review with $name", "", null, null)?.trim()
+        promptDialog("Review with $name", "Anything $name should look at in particular? (optional)", "review", "", null)
+
+    /**
+     * A prompt dialog with the saved prompts of `category` (setting "Prompts") as presets: picking one fills the text
+     * after `initial`. With `required`, OK needs text beyond `initial` (the message says what). Null when cancelled.
+     */
+    private fun promptDialog(title: String, message: String, category: String, initial: String, required: String?): String? {
+        val presets = promptPresets(HerdrSettings.get().prompts, category)
+        val area = JBTextArea(initial, 10, 70).apply { lineWrap = true; wrapStyleWord = true }
+        val content = panel {
+            row { label(message) }
+            if (presets.isNotEmpty()) row("Preset:") {
+                comboBox(listOf("") + presets).applyToComponent {
+                    addActionListener { area.text = initial + ((selectedItem as? String) ?: "") }
+                }
+            }
+            row { scrollCell(area).align(Align.FILL) }.resizableRow()
+        }
+        val dialog = object : DialogWrapper(project) {
+            init { this.title = title; init(); initValidation() }
+            override fun createCenterPanel() = content
+            override fun getPreferredFocusedComponent() = area
+            override fun doValidate() =
+                if (required != null && (area.text.isBlank() || area.text.trim() == initial.trim())) ValidationInfo(required, area) else null
+        }
+        return if (dialog.showAndGet()) area.text.trim() else null
+    }
 
     private fun startReview(name: String, paneId: String, root: String, out: File, text: String) = run("Review with $name") {
         out.parentFile.mkdirs()

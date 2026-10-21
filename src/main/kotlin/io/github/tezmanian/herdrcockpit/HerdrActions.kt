@@ -25,6 +25,14 @@ fun agentName(kind: String, taken: Collection<String>): String {
     return "$base-$n"
 }
 
+/** Your saved prompts (setting "Prompts", one "category: text" per line) of one category; lines without a category are "general". */
+fun promptPresets(setting: String?, category: String): List<String> =
+    (setting ?: "").lines().map { it.trim() }.filter { it.isNotEmpty() }.mapNotNull { line ->
+        val m = Regex("^([A-Za-z]+):\\s*(.+)$").find(line)
+        val (cat, text) = if (m != null) m.groupValues[1].lowercase() to m.groupValues[2] else "general" to line
+        text.takeIf { cat == category }
+    }
+
 /** The agents offered first when picking (setting "Agents"), known kinds only, in the given order. */
 fun favoriteAgents(setting: String?): List<String> =
     (setting ?: "").split(',', ' ').map { it.trim().lowercase() }.filter { it in AGENT_KINDS }.distinct()

@@ -17,6 +17,8 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
+import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.rows
 import com.intellij.ui.dsl.builder.panel
 
 class HerdrSettingsState : BaseState() {
@@ -47,6 +49,14 @@ class HerdrSettingsState : BaseState() {
     var closeTabInHerdr by string("never")
     /** Starting Herdr or opening the TUI creates a space for every project of the window (attached ones too) that has none. */
     var spacePerProject by property(false)
+    /** Saved prompts, one "category: text" per line ("review": the reviews, "general": Send to Agent and Hand Off). */
+    var prompts by string(
+        "review: Focus on security: injection, authorization, secrets, unsafe input.\n" +
+            "review: Only real bugs; skip style and naming.\n" +
+            "review: Focus on tests: missing cases and edge cases.\n" +
+            "general: Explain what this does and point out anything risky.\n" +
+            "general: Write unit tests for this.\n"
+    )
     /** Kiro's monthly credit allowance (Kiro doesn't store it locally); 0 = unknown, no bar. */
     var kiroMonthlyCredits by property(0)
 }
@@ -104,6 +114,12 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row("Closing a pane's tab yourself:") {
                     comboBox(listOf("never", "ask", "always")).bindItem({ s.closeTabInHerdr ?: "never" }, { s.closeTabInHerdr = it ?: "never" })
                         .comment("never: only detaches, the pane keeps running in Herdr. ask: closes idle shells in Herdr too, asks for agents and busy shells. always: closes it in Herdr. The last pane of a space always asks.")
+                }
+            }
+            group("Prompts") {
+                row {
+                    textArea().bindText({ s.prompts ?: "" }, { s.prompts = it }).rows(6).align(AlignX.FILL)
+                        .comment("Offered as presets in the prompt dialogs, one per line as \"category: text\". review: Review Branch with Agent… and Review with Agent…; general (or no category): Send to Agent… and Hand Off to Agent….")
                 }
             }
             group("New tabs") {

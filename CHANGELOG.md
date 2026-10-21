@@ -5,6 +5,9 @@
   an agent you pick reviews exactly those changes between the merge request's commits, without checking out its
   branch. Findings come back as with Review Branch with Agent…; nothing is posted.
 - Both reviews ask for optional extra instructions (e.g. "focus on security") before sending.
+- Saved prompts (Settings | Tools | Herdr Cockpit | Prompts, one "category: text" per line): the prompt dialogs of the
+  reviews (category review) and of Send to Agent… and Hand Off to Agent… (general) offer them as presets that fill the
+  text.
 
 ## 0.1.13
 - Review Branch with Agent…: right-click an agent to have it review its folder's branch against another branch

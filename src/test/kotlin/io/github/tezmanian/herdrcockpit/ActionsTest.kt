@@ -205,4 +205,12 @@ class ActionsTest {
         assertTrue(isValidBranch("feat/new-idea"))
         listOf("", "a b", "a..b", "-x", "x/", "x.", "a@{b", "a:b").forEach { assertFalse(it, isValidBranch(it)) }
     }
+
+    @Test
+    fun promptPresetsByCategory() {
+        val setting = "review: Focus on security\n\n  Review: only bugs \nExplain this\ngeneral: Write tests: unit ones\nother: x"
+        assertEquals(listOf("Focus on security", "only bugs"), promptPresets(setting, "review"))
+        assertEquals(listOf("Explain this", "Write tests: unit ones"), promptPresets(setting, "general"))
+        assertEquals(emptyList<String>(), promptPresets(null, "review"))
+    }
 }
