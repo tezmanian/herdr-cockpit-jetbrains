@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.15
+- Fixed a ClassCastException in the new UI when the tool window icon shows the red "blocked" dot.
+
 ## 0.1.14
 - Review with Agent… in PhpStorm's GitLab tool window: right-click a merge request's changes (or some of its files);
   an agent you pick reviews exactly those changes between the merge request's commits, without checking out its

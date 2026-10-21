@@ -9,6 +9,7 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.IconLoader
+import com.intellij.openapi.util.ScalableIcon
 import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.openapi.wm.StatusBarWidgetFactory
@@ -88,8 +89,12 @@ fun badgeToolWindow(project: Project, toolWindow: ToolWindow) {
     }
 }
 
-/** The icon with a red dot in its top right corner (the platform's BadgeIcon is internal API). */
-private class DotIcon(private val base: Icon) : Icon by base {
+/** The icon with a red dot in its top right corner (the platform's BadgeIcon is internal API).
+ *  Scalable because the new UI's stripe button casts the tool window icon to ScalableIcon. */
+private class DotIcon(private val base: Icon) : ScalableIcon, Icon by base {
+    override fun getScale() = (base as? ScalableIcon)?.scale ?: 1f
+    override fun scale(scale: Float): Icon = DotIcon((base as? ScalableIcon)?.scale(scale) ?: base)
+
     override fun paintIcon(c: Component?, g: Graphics, x: Int, y: Int) {
         base.paintIcon(c, g, x, y)
         val g2 = g.create() as Graphics2D
