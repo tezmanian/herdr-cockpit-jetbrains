@@ -10,6 +10,7 @@ import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.actionSystem.DataKey
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -18,8 +19,9 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vcs.FilePath
 import com.intellij.openapi.vcs.FileStatus
-import com.intellij.openapi.vcs.VcsDataKeys
+import com.intellij.openapi.vcs.history.VcsRevisionNumber
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
@@ -256,17 +258,30 @@ class SendToAgentAction : DumbAwareAction("Send to Agent…", "Send the selectio
 
 /** "Review with Agent…" on a merge request's changes in the GitLab tool window (registered only with the GitLab plugin). */
 class ReviewChangesWithAgentAction : DumbAwareAction("Review with Agent…", "An agent in Herdr reviews these changes and lists its findings; nothing is posted", AllIcons.Actions.Preview) {
+    // The merge request's change tree puts its selection (RefComparisonChange, @ApiStatus.Experimental) only under this key,
+    // not in VcsDataKeys.CHANGES. shortcut: looked up by name and read reflectively so the plugin needn't depend on
+    // collaborationTools; if JetBrains renames it the entry just stays hidden. Upgrade when there's a public key.
+    private val selected = DataKey.create<List<Any>>("Code.Review.Change.List.Selected.RefComparisonChanges")
+
+    private fun get(o: Any, name: String) = runCatching { o.javaClass.getMethod(name).invoke(o) }.getOrNull()
+
+    /** (before commit, after commit, path) of each selected change. */
+    private fun changes(e: AnActionEvent) = e.getData(selected).orEmpty().map { c ->
+        Triple((get(c, "getRevisionNumberBefore") as? VcsRevisionNumber)?.asString(), (get(c, "getRevisionNumberAfter") as? VcsRevisionNumber)?.asString(),
+            ((get(c, "getFilePathAfter") ?: get(c, "getFilePathBefore")) as? FilePath)?.path)
+    }
+
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabledAndVisible = e.project != null && !e.getData(VcsDataKeys.CHANGES).isNullOrEmpty()
+        e.presentation.isEnabledAndVisible = e.project != null && changes(e).isNotEmpty()
     }
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        val changes = e.getData(VcsDataKeys.CHANGES).orEmpty()
+        val changes = changes(e)
         val service = HerdrService.getInstance(project)
-        val (base, head) = changeRange(changes.map { it.beforeRevision?.revisionNumber?.asString() to it.afterRevision?.revisionNumber?.asString() })
+        val (base, head) = changeRange(changes.map { it.first to it.second })
             ?: return service.notify("Couldn't tell which commits these changes are between.", NotificationType.WARNING)
-        service.reviewChanges(changes.mapNotNull { (it.afterRevision ?: it.beforeRevision)?.file?.path }, base, head)
+        service.reviewChanges(changes.mapNotNull { it.third }, base, head)
     }
 
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
