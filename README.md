@@ -62,7 +62,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   (asks first), Settings, Copy Diagnostics) and a red badge on the tool window icon while an agent is blocked.
 - **Help** (`?` in the tool window's title bar, "Help" on the disconnected screens): "How to read the Herdr sidebar"
   in an editor tab, adapted from the VS Code extension's help page.
-- **From Herdr to the IDE** with the Herdr plugin in `herdr-plugin/` (`herdr plugin install tezmanian/herdr-cockpit/herdr-plugin`):
+- **From Herdr to the IDE** with the Herdr plugin in `herdr-plugin/` (`herdr plugin install tezmanian/herdr-cockpit-jetbrains/herdr-plugin`):
   "Open in JetBrains IDE" (the space and pane you're on), "Open selected file" (`path:line:col` and similar forms) and
   "Review changes". It calls the IDE's built-in server (`/api/herdr-cockpit/…`) with the port and a random per-run
   token from `~/.herdr-cockpit/jetbrains.json` (owner-only); requests with an `Origin` (web pages) are refused, and
@@ -72,6 +72,10 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
 - Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, a space per project, switching behaviour, space order, notifications, agents offered
   for new tabs, closing tabs, Kiro monthly credits).
+
+## Issues
+
+Bugs and ideas: [GitHub issues](https://github.com/tezmanian/herdr-cockpit-jetbrains/issues).
 
 ## Not ported
 
@@ -94,7 +98,9 @@ Install in PhpStorm: *Settings | Plugins | ⚙ | Install Plugin from Disk…* an
 
 `.github/workflows/build.yml` (GitHub) and `.gitea/workflows/build.yml` (Gitea, on the `jdk21-runner` runner label, i.e. the image from Development/CI-Runner; Gitea ignores `.github/workflows` while `.gitea/workflows` exists): tests and
 `buildPlugin` (the zip is uploaded as the `herdr-cockpit-plugin` artifact), then `verifyPlugin`, the JetBrains Plugin
-Verifier against PhpStorm 2025.3.6.1 and 2026.2.3. A tag `v<version>` on GitHub also publishes a release with the zip.
+Verifier against PhpStorm 2025.3.6.1 and 2026.2.3. A tag `v<version>` publishes a release with the zip on both. Gitea is
+the source and push-mirrors to [GitHub](https://github.com/tezmanian/herdr-cockpit-jetbrains), so a tag pushed to Gitea
+releases on GitHub too.
 Locally: `./gradlew verifyPlugin` (downloads both PhpStorm versions once).
 
 ### Live test and sandbox IDE (use a throwaway session, never your own)

@@ -1,4 +1,4 @@
-<idea-plugin url="https://gitea.root-zone.info/tez/herdr-cockpit">
+<idea-plugin url="https://github.com/tezmanian/herdr-cockpit-jetbrains">
     <id>io.github.tezmanian.herdrcockpit</id>
     <name>Herdr Cockpit</name>
     <vendor>tezmanian</vendor>

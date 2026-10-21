@@ -1,5 +1,5 @@
-# Builds, tests and verifies the plugin on GitHub. (Gitea runs .gitea/workflows/build.yml instead, which takes
-# precedence there.) A tag v<version> also publishes a GitHub release with the plugin zip.
+# Builds, tests and verifies the plugin on GitHub (the push mirror of the Gitea repo; Gitea runs
+# .gitea/workflows/build.yml instead). A tag v<version> also publishes a GitHub release with the plugin zip.
 name: Build
 
 on:
@@ -51,6 +51,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+      - name: Tag matches the version
+        run: '[ "v$(sed -n "s/^version *= *//p" gradle.properties)" = "${{ github.ref_name }}" ] || { echo "tag ${{ github.ref_name }} does not match the version in gradle.properties"; exit 1; }'
       - uses: actions/download-artifact@v8
         with:
           name: herdr-cockpit-plugin

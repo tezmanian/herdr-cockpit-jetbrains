@@ -1,6 +1,6 @@
 # Herdr Cockpit for JetBrains: jump from Herdr to PhpStorm (or another JetBrains IDE) running the Herdr Cockpit plugin.
 #
-#   herdr plugin install tezmanian/herdr-cockpit/herdr-plugin
+#   herdr plugin install tezmanian/herdr-cockpit-jetbrains/herdr-plugin
 #
 # One POSIX shell script (herdr-cockpit-jetbrains.sh); needs curl (or wget).
 id = "tezmanian.herdr-cockpit-jetbrains"

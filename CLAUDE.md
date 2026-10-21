@@ -71,4 +71,7 @@ skipped in untrusted projects.
 - Avoid platform APIs that are deprecated in 2026.2: `verifyPlugin` flags them (for example `ReadAction.compute`; use
   `ApplicationManager.getApplication().runReadAction`).
 - Known limits are marked in code as `// shortcut: <limit>, <when to upgrade>`.
-- Commits reference Gitea issues (`Closes #N`). Remote: gitea.root-zone.info/tez/herdr-cockpit.
+- Remote: gitea.root-zone.info/tez/herdr-cockpit, which push-mirrors to github.com/tezmanian/herdr-cockpit-jetbrains
+  (the public home). Internal issues live on Gitea, issues from outside on GitHub, and the numbers overlap: a bare
+  `Closes #N` would close the issue with that number on both. Reference them with the repo: `Closes tez/herdr-cockpit#N`
+  (Gitea) or `Fixes tezmanian/herdr-cockpit-jetbrains#N` (GitHub).
