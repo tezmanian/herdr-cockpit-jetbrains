@@ -138,6 +138,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
             }
             if (pane == null || pane.isAgent) add(Item("Review Changes", AllIcons.Actions.Diff) { review(space, pane) })
             if (pane?.isAgent == true) add(Item("Hand Off to Agent…", AllIcons.Actions.Forward) { handOff(space, pane) })
+            if (pane?.agentKind == "claude") add(Item("Switch Claude Session…", AllIcons.Vcs.History) { switchClaudeSession(space, pane) })
             add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
             add(Item("Close in Herdr…", AllIcons.Actions.Close, "Herdr") { closeInHerdr(space, pane) })
             add(Item("Show Raw", AllIcons.FileTypes.Json, "Debug") { showRaw(space, pane) })
@@ -154,7 +155,25 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         promptOne("Hand off $from to", targets, "Hand Off to", "", handoffContext(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane))
     }
 
-    /** Code or files from the IDE to an agent: agents in the space holding `path` first, the dialog starts with `context`. */
+    /** A fresh session (`/clear`) or one of Claude Code's saved sessions for the agent's folder (`/resume <id>`). */
+    fun switchClaudeSession(space: Space, pane: Pane) {
+        val name = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
+        val cwd = pane.cwd ?: space.cwd
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val sessions = cwd?.let { claudeSessions(claudeProjectDir(File(System.getProperty("user.home")), it)) }.orEmpty()
+            ApplicationManager.getApplication().invokeLater {
+                val send = { text: String -> prompt("$name: $text", name, pane.id, text) }
+                choose("Switch Claude session of $name", buildList {
+                    add(Item("New Session (/clear)", AllIcons.General.Add) { send("/clear") })
+                    sessions.forEachIndexed { i, s ->
+                        add(Item("${sessionWhen(s.modified)}  ${s.title}", null, if (i == 0) "Resume" else null) { send("/resume ${s.id}") })
+                    }
+                })
+            }
+        }
+    }
+
+    /** Code or files from the IDE to an agent:agents in the space holding `path` first, the dialog starts with `context`. */
     fun sendToAgent(context: String, path: String?) {
         if (!connected()) return
         val spaces = service.currentModel()?.spaces.orEmpty()
@@ -176,16 +195,18 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
                     override fun canClose(t: String?) = checkInput(t)
                 })
                     ?.trim()?.takeIf { it.isNotEmpty() && it != initial.trim() } ?: return@Item
-                run("$verb $to") {
-                    try {
-                        actions.promptAgent(a.id, text + suffix)
-                    } catch (e: HerdrError) {
-                        if (e.code != "agent_blocked") throw e
-                        service.notify("$to is waiting for an answer; nothing was sent.", NotificationType.WARNING)
-                    }
-                }
+                prompt("$verb $to", to, a.id, text + suffix)
             }
         })
+    }
+
+    private fun prompt(title: String, to: String, paneId: String, text: String) = run(title) {
+        try {
+            actions.promptAgent(paneId, text)
+        } catch (e: HerdrError) {
+            if (e.code != "agent_blocked") throw e
+            service.notify("$to is waiting for an answer; nothing was sent.", NotificationType.WARNING)
+        }
     }
 
     /** Herdr's snapshot records (and, for a pane, the polled activity) as a read-only JSON tab. */

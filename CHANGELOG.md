@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+- Switch Claude Session…: right-click a Claude agent to start a new session (`/clear`) or resume one of Claude Code's
+  saved sessions for its folder.
+
 ## 0.1.11
 - Plan usage reads Claude Code transcripts only where they grew, and Kiro sessions only when they changed, instead of
   every file every minute in every window.

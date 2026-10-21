@@ -43,7 +43,9 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   when it's the only pane, a space, or a worktree space with its folder; forcing is offered when Herdr refuses because
   of uncommitted changes), "Show Raw" (Herdr's records for it as a read-only JSON tab), and for agents **Hand Off to
   Agent…** (also in the "is done" notification): pick an agent in any space and type what it should do; the prompt
-  (`agent.prompt`) adds where the work came from and `herdr agent read <pane>` to read its output.
+  (`agent.prompt`) adds where the work came from and `herdr agent read <pane>` to read its output. For Claude agents,
+  **Switch Claude Session…** starts a new session (`/clear`) or resumes one of Claude Code's saved sessions for the
+  agent's folder (`/resume <id>`, newest first, with their titles).
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
   or the files go to an agent you pick (the file's space first), with what it should do.
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
@@ -125,6 +127,7 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `Connection.kt` | finding `herdr`, `diagnose()`, `startServer()` (detached, clean env), backoff |
 | `Activity.kt` | shell/agent summaries from `pane.process_info` + `pane.read` |
 | `Usage.kt` | plan usage of Claude Code, Codex and Kiro from their local files (port of `usage.ts`) |
+| `ClaudeSessions.kt` | Claude Code's saved sessions for a folder, for "Switch Claude Session…" |
 | `GitInfo.kt` | git CLI with the upstream's hardening (no fsmonitor, filters, hooks, lazy fetch); skipped in untrusted projects |
 | `ViewState.kt` | JSON for `media/panel.js` (same shape as the VS Code extension's `viewState.ts`) |
 | `HerdrService.kt` | per-project sync loop, connection states, switching, mounting, notifications |
