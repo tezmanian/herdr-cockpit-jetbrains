@@ -44,4 +44,13 @@ class AgentReviewTest {
     fun fileNameIsSafe() {
         assertEquals(File(root, ".herdr-cockpit/reviews/core_-feat_x.json"), reviewFile(root, "core ", "feat/x"))
     }
+
+    @Test
+    fun rangeIsTheMostCommonBeforeAndAfterCommit() {
+        val a = "aaaaaaa1"
+        val b = "bbbbbbb2"
+        assertEquals(a to b, changeRange(listOf(a to b, null to b, a to null, "cccccc3" to b, a to "not a hash")))
+        assertNull(changeRange(listOf(null to b)))
+        assertNull(changeRange(listOf(a to a)))
+    }
 }

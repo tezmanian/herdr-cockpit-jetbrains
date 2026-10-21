@@ -351,19 +351,45 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
                     if (!isValidBranch(it)) "Not a valid branch name" else null
                 } ?: return@later
                 val out = reviewFile(File(System.getProperty("user.home")), space.label, branch)
-                run("Review branch with $name") {
-                    out.parentFile.mkdirs()
-                    out.delete()
-                    reviews[pane.id] = PendingReview(root, out, System.currentTimeMillis())
-                    try {
-                        actions.promptAgent(pane.id, reviewPrompt(root, branch, target, out))
-                    } catch (e: HerdrError) {
-                        reviews.remove(pane.id)
-                        if (e.code != "agent_blocked") throw e
-                        service.notify("$name is waiting for an answer; nothing was sent.", NotificationType.WARNING)
-                    }
-                }
+                startReview(name, pane.id, root, out, reviewPrompt(root, branch, target, out))
             }
+        }
+    }
+
+    /** A merge request's changes (GitLab tool window): pick an agent, it reviews `base`..`head` for those files. */
+    fun reviewChanges(files: List<String>, base: String, head: String) {
+        if (!connected()) return
+        if (!TrustedProjects.isProjectTrusted(project)) return service.notify("Review needs a trusted project (git isn't run in untrusted ones).", NotificationType.WARNING)
+        run("Review with agent") {
+            // A file new in the merge request may not exist here: find the repo from its nearest existing folder.
+            val dir = generateSequence(File(files.first())) { it.parentFile }.firstOrNull { it.isDirectory }?.path
+            val root = dir?.let(::gitRoot) ?: return@run service.notify("${files.first()} is not inside a git repository.", NotificationType.INFORMATION)
+            val paths = files.mapNotNull { f -> File(f).relativeTo(File(root)).path.takeUnless { it.startsWith("..") } }.distinct()
+            later {
+                val targets = service.currentModel()?.spaces.orEmpty().flatMap { s -> s.agents.map { s to it } }
+                    .sortedByDescending { (s, a) -> (a.cwd ?: s.cwd)?.let { it == root || it.startsWith("$root/") } == true }
+                if (targets.isEmpty()) return@later service.notify("No agent in Herdr to review this.", NotificationType.INFORMATION)
+                choose("Review ${paths.size} file${if (paths.size > 1) "s" else ""} with", targets.map { (s, a) ->
+                    val name = editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)
+                    Item("$name (${a.status ?: AgentStatus.unknown})", null) {
+                        val out = reviewFile(File(System.getProperty("user.home")), s.label, "mr-" + head.take(12))
+                        startReview(name, a.id, root, out, reviewChangesPrompt(root, base, head, paths, out))
+                    }
+                })
+            }
+        }
+    }
+
+    private fun startReview(name: String, paneId: String, root: String, out: File, text: String) = run("Review with $name") {
+        out.parentFile.mkdirs()
+        out.delete()
+        reviews[paneId] = PendingReview(root, out, System.currentTimeMillis())
+        try {
+            actions.promptAgent(paneId, text)
+        } catch (e: HerdrError) {
+            reviews.remove(paneId)
+            if (e.code != "agent_blocked") throw e
+            service.notify("$name is waiting for an answer; nothing was sent.", NotificationType.WARNING)
         }
     }
 

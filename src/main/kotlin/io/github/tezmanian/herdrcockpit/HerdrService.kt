@@ -75,6 +75,7 @@ class HerdrService(private val project: Project) : Disposable {
     val actions = HerdrActions(client)
     private val manage = HerdrManage(project, this)
     fun sendToAgent(context: String, path: String?) = manage.sendToAgent(context, path)
+    fun reviewChanges(files: List<String>, base: String, head: String) = manage.reviewChanges(files, base, head)
     private val activity = ActivityWatcher(client)
     private val git = GitCache { scheduleRender() }
     private val logLines = ArrayDeque<String>()

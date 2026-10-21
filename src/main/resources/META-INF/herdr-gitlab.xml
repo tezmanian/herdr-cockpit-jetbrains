@@ -1,0 +1,7 @@
+<idea-plugin>
+    <actions>
+        <action id="HerdrCockpit.ReviewChangesWithAgent" class="io.github.tezmanian.herdrcockpit.ReviewChangesWithAgentAction">
+            <add-to-group group-id="GitLab.Merge.Request.Changes.Popup" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

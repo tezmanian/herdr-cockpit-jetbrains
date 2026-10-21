@@ -14,10 +14,29 @@ fun reviewFile(home: File, space: String, branch: String): File =
 
 fun reviewPrompt(root: String, branch: String, target: String, out: File) =
     "Review the changes of branch $branch against $target in $root: run `git diff $target...HEAD` there and read the " +
-        "code around them. Only read: don't edit or create files other than the one below, don't commit, push or post " +
-        "comments anywhere. Write your findings to $out as a JSON array and nothing else: " +
-        """[{"path": "file relative to the repo root", "line": line number in the branch's version, "body": "the finding"}]""" +
+        "code around them. " + reviewRules(out)
+
+/** A merge request's changes picked in the IDE: `base`..`head` limited to `paths` (relative to `root`). */
+fun reviewChangesPrompt(root: String, base: String, head: String, paths: List<String>, out: File) =
+    "Review these merge request changes in $root: run `git diff $base $head -- ${paths.joinToString(" ") { "'$it'" }}` " +
+        "there (if git doesn't know the commits, fetch them first, e.g. `git fetch origin`) and read the code around " +
+        "them as of $head (`git show $head:<path>`); line numbers refer to $head. " + reviewRules(out)
+
+private fun reviewRules(out: File) =
+    "Only read: don't edit or create files other than the one below, don't commit, push or post comments anywhere. " +
+        "Write your findings to $out as a JSON array and nothing else: " +
+        """[{"path": "file relative to the repo root", "line": line number in the reviewed version, "body": "the finding"}]""" +
         ", or [] if you found nothing."
+
+private val HASH = Regex("^[0-9a-f]{7,64}$")
+
+/** The commits a set of changes lies between, from each change's (before, after) revision: the most common of each. */
+fun changeRange(revisions: List<Pair<String?, String?>>): Pair<String, String>? {
+    fun most(list: List<String?>) = list.filterNotNull().filter { HASH.matches(it) }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+    val base = most(revisions.map { it.first }) ?: return null
+    val head = most(revisions.map { it.second }) ?: return null
+    return if (base == head) null else base to head
+}
 
 /** The findings in `json` whose path stays inside `root`; null if it isn't a JSON array. */
 fun parseReview(json: String, root: File): List<Finding>? {

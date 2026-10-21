@@ -5,6 +5,7 @@ package io.github.tezmanian.herdrcockpit
 
 import com.google.gson.JsonParser
 import com.intellij.icons.AllIcons
+import com.intellij.notification.NotificationType
 import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -18,6 +19,7 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vcs.FileStatus
+import com.intellij.openapi.vcs.VcsDataKeys
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
@@ -247,6 +249,24 @@ class SendToAgentAction : DumbAwareAction("Send to Agent…", "Send the selectio
         }
         if (context.isEmpty()) return
         HerdrService.getInstance(project).sendToAgent(context, file?.path)
+    }
+
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+}
+
+/** "Review with Agent…" on a merge request's changes in the GitLab tool window (registered only with the GitLab plugin). */
+class ReviewChangesWithAgentAction : DumbAwareAction("Review with Agent…", "An agent in Herdr reviews these changes and lists its findings; nothing is posted", AllIcons.Actions.Preview) {
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabledAndVisible = e.project != null && !e.getData(VcsDataKeys.CHANGES).isNullOrEmpty()
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        val changes = e.getData(VcsDataKeys.CHANGES).orEmpty()
+        val service = HerdrService.getInstance(project)
+        val (base, head) = changeRange(changes.map { it.beforeRevision?.revisionNumber?.asString() to it.afterRevision?.revisionNumber?.asString() })
+            ?: return service.notify("Couldn't tell which commits these changes are between.", NotificationType.WARNING)
+        service.reviewChanges(changes.mapNotNull { (it.afterRevision ?: it.beforeRevision)?.file?.path }, base, head)
     }
 
     override fun getActionUpdateThread() = ActionUpdateThread.BGT

@@ -11,6 +11,8 @@
     <depends>com.intellij.modules.platform</depends>
     <!-- 2026.2 moved JCEF (the sidebar) into its own plugin; without this the class loader cannot see JBCefApp. -->
     <depends>com.intellij.modules.jcef</depends>
+    <!-- "Review with Agent…" in the GitLab tool window's merge request changes; without the GitLab plugin it's just absent. -->
+    <depends optional="true" config-file="herdr-gitlab.xml">org.jetbrains.plugins.gitlab</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Herdr" anchor="left" icon="/icons/herdr.svg"

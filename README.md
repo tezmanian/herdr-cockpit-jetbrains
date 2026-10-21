@@ -50,6 +50,8 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   pick (`git diff <target>...HEAD`) and writes its findings as JSON to `~/.herdr-cockpit/reviews/`. Nothing is posted
   to GitLab or anywhere else. When it's done, a notification lists the findings; each opens the file at its line.
   Findings pointing outside the repository are dropped. Only in trusted projects.
+  With the GitLab plugin, **Review with Agent…** is also in the context menu of a merge request's changes in the GitLab
+  tool window: the agent reviews those files between the merge request's commits, without checking out its branch.
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
   or the files go to an agent you pick (the file's space first), with what it should do.
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
