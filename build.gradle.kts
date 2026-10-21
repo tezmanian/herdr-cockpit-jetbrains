@@ -46,6 +46,13 @@ intellijPlatform {
     }
 }
 
+// MIT (ours and upstream's) and the bundled assets' licenses want their notices in every copy: ship them in the jar.
+tasks.jar {
+    from(files("LICENSE", "LICENSE.upstream", "THIRD_PARTY_NOTICES.md")) {
+        into("META-INF")
+    }
+}
+
 tasks.runIde {
     // Point the sandbox IDE at a throwaway Herdr session: -PherdrSocket=~/.config/herdr/sessions/<name>/herdr.sock
     providers.gradleProperty("herdrSocket").orNull?.let { sock ->
