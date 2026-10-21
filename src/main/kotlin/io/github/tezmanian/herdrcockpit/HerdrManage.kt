@@ -24,6 +24,7 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
+import com.intellij.openapi.progress.runBlockingCancellable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.InputValidatorEx
@@ -42,8 +43,10 @@ import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.panel
 import java.awt.MouseInfo
 import java.io.File
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.Icon
+import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 
 /** What a new tab runs: a plain shell, or an agent kind ("claude", "codex", ...). */
 data class What(val kind: String? = null, val label: String? = null)
@@ -340,8 +343,11 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
     }
 
     /** A review an agent owes: where it writes, and the branch (if any) and commit it reviews, to find the merge request. */
-    private class PendingReview(val root: String, val out: File, val since: Long, val branch: String?, val head: String?)
+    /** A review an agent owes: `forge` is known when it was started from that forge's tool window. */
+    private class PendingReview(val root: String, val out: File, val since: Long, val branch: String?, val head: String?, val forge: Forge? = null)
     private val reviews = ConcurrentHashMap<String, PendingReview>()
+    /** The forge found per host; unknown ones are asked again next time. */
+    private val forges = ConcurrentHashMap<String, Forge>()
 
     /** Asks the agent to review its folder's branch against a target and write findings to a file; nothing is posted. */
     fun reviewBranch(space: Space, pane: Pane) {
@@ -382,7 +388,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
                     Item("$name (${a.status ?: AgentStatus.unknown})", null) {
                         val out = reviewFile(File(System.getProperty("user.home")), s.label, "mr-" + head.take(12))
                         val extra = reviewInstructions(name) ?: return@Item
-                        startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head), reviewChangesPrompt(root, base, head, paths, out, extra))
+                        startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head, Forge.GitLab), reviewChangesPrompt(root, base, head, paths, out, extra))
                     }
                 })
             }
@@ -441,8 +447,16 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         val findings = parseReview(r.out.readText(), File(r.root))
             ?: return service.notify("$name's review in ${r.out} isn't a JSON array of findings.", NotificationType.WARNING)
         if (findings.isEmpty()) return service.notify("$name's review: no findings.", NotificationType.INFORMATION)
-        // A GitHub remote certainly isn't GitLab; any other host may be a self-hosted one.
-        val gitlab = gitRemoteUrl(r.root)?.let(::gitlabProject)?.takeIf { it.host != "github.com" }
+        val remote = gitRemoteUrl(r.root)?.let(::gitlabProject)
+        // Detection may ask CLIs and the server: off the snapshot thread.
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val forge = remote?.let { r.forge ?: forges[it.host] ?: detectForge(it.host, HerdrSettings.forgeClis())?.also { f -> forges[it.host] = f } }
+            if (remote != null) service.log("review: ${remote.host} is ${forge?.title ?: "an unknown kind of server"}")
+            offerFindings(name, r, findings, remote?.takeIf { forge == Forge.GitLab })
+        }
+    }
+
+    private fun offerFindings(name: String, r: PendingReview, findings: List<Finding>, gitlab: GitLabProject?) {
         later {
             val n = com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
                 .createNotification("$name's review: ${findings.size} finding${if (findings.size > 1) "s" else ""}", NotificationType.INFORMATION)
@@ -466,15 +480,48 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
 
     private fun tokenKey(host: String) = CredentialAttributes(generateServiceName("Herdr Cockpit", "GitLab token for $host"))
 
-    /** Findings as draft notes on the merge request: through glab when it's signed in to the host, else with a token. */
+    /**
+     * The IDE's own GitLab account for `host` (Settings | Version Control | GitLab): its REST API base and token, or null.
+     * shortcut: reflection, because the GitLab plugin's account API is internal and changed in 2026.2 (String token ->
+     * GitLabCredentials). Upgrade when it gets a public API.
+     */
+    private fun ideGitLabAccount(host: String): Pair<String, String>? = try {
+        // Our optional dependency on the GitLab plugin puts its classes in reach when it's enabled.
+        val cls = Class.forName("org.jetbrains.plugins.gitlab.authentication.accounts.GitLabAccountManager", true, javaClass.classLoader)
+        val manager = ApplicationManager.getApplication().getService(cls)
+        if (manager == null) null else {
+            val accounts = cls.getMethod("getAccountsState").invoke(manager) as kotlinx.coroutines.flow.StateFlow<*>
+            val account = (accounts.value as Set<*>).filterNotNull().firstOrNull { a ->
+                val server = a.javaClass.getMethod("getServer").invoke(a)
+                (server.javaClass.getMethod("toURI").invoke(server) as URI).host.equals(host, ignoreCase = true)
+            }
+            account?.let { a ->
+                val server = a.javaClass.getMethod("getServer").invoke(a)
+                val api = server.javaClass.getMethod("getRestApiUri").invoke(server).toString().removeSuffix("/")
+                val find = cls.methods.first { it.name == "findCredentials" && it.parameterCount == 2 }
+                val creds = runBlockingCancellable { suspendCoroutineUninterceptedOrReturn<Any?> { find.invoke(manager, a, it) } }
+                val token = creds as? String ?: creds?.javaClass?.getMethod("getAccessToken")?.invoke(creds) as? String
+                token?.let { api to it }
+            }
+        }
+    } catch (_: ClassNotFoundException) {
+        null
+    } catch (e: Exception) {
+        service.log("GitLab account of the IDE: ${e.message}")
+        null
+    }
+
+    /** Findings as draft notes on the merge request: through glab or the IDE's GitLab account, else with a token of our own. */
     private fun sendToGitLab(r: PendingReview, gitlab: GitLabProject, findings: List<Finding>) = run("Send review to GitLab") {
-        val glab = signedInGlab(gitlab.host)
+        val glab = signedInGlab(HerdrSettings.forgeClis().glab, gitlab.host)
         if (glab != null) return@run prepareDrafts(GlabApi(glab, gitlab.host), "glab", r, gitlab, findings)
+        val ide = ideGitLabAccount(gitlab.host)
+        if (ide != null) return@run prepareDrafts(RestApi(ide.first, ide.second), "the IDE's GitLab account", r, gitlab, findings)
         val token = PasswordSafe.instance.getPassword(tokenKey(gitlab.host))
         if (token != null) return@run prepareDrafts(RestApi("https://${gitlab.host}/api/v4", token), "your token", r, gitlab, findings)
         later {
             val entered = Messages.showPasswordDialog(project,
-                "glab isn't installed or not signed in to ${gitlab.host}. Sign in with `glab auth login --hostname ${gitlab.host}`, " +
+                "No glab signed in and no GitLab account in the IDE for ${gitlab.host}. Add one in Settings | Version Control | GitLab, " +
                     "or enter a personal access token with scope api here (kept in the IDE's password safe):",
                 "GitLab Token for ${gitlab.host}", null)?.trim()?.ifEmpty { null } ?: return@later
             run("Send review to GitLab") {
@@ -490,7 +537,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
             findMergeRequest(api, gitlab, r.branch, r.head)
         } catch (e: GitLabError) {
             // A token GitLab rejects is forgotten, so the next try asks again.
-            if (via != "glab" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
+            if (via == "your token" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
             throw e
         } ?: return service.notify("No open merge request on ${gitlab.host} for ${r.branch ?: "these changes"}.", NotificationType.INFORMATION)
         val drafts = draftsFor(findings, mr)
@@ -525,7 +572,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
             val n = try {
                 sendDrafts(api, gitlab, mr, chosen)
             } catch (e: GitLabError) {
-                if (via != "glab" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
+                if (via == "your token" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
                 throw e
             }
             later {

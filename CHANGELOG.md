@@ -3,7 +3,11 @@
 ## 0.1.16
 - Send to GitLab as Drafts…: an agent review's findings become draft notes on the merge request (via `glab` when it's
   signed in, otherwise with a personal access token kept in the password safe). A preview picks what to send; nothing
-  is published until you submit the review.
+  is published until you submit the review. Without `glab` it uses the IDE's own GitLab account for the host if
+  there is one.
+- The send entry only appears for a GitLab: the plugin tells GitLab, GitHub and Gitea apart (known hosts, `glab`/`gh`/
+  `tea` signed in to the host, else one anonymous request to the server). Paths to these CLIs can be set in Settings |
+  Tools | Herdr Cockpit | Review tools.
 
 ## 0.1.15
 - Fixed a ClassCastException in the new UI when the tool window icon shows the red "blocked" dot.

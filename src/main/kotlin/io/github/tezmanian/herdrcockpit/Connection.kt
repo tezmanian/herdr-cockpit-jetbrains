@@ -33,8 +33,11 @@ fun toolDirs(): List<String> {
 fun findTool(name: String): String =
     toolDirs().map { "$it/$name" }.firstOrNull { File(it).exists() } ?: name
 
-fun resolveBinary(override: String?): String =
-    if (override.isNullOrBlank()) findTool("herdr") else if (override.startsWith("~")) home + override.substring(1) else override
+fun resolveBinary(override: String?): String = resolveTool("herdr", override)
+
+/** A tool from its settings path ("~" expanded), else [findTool]. */
+fun resolveTool(name: String, override: String?): String =
+    if (override.isNullOrBlank()) findTool(name) else if (override.startsWith("~")) home + override.trim().substring(1) else override.trim()
 
 fun binaryFound(bin: String): Boolean =
     if (File(bin).isAbsolute) File(bin).exists()

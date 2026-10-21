@@ -1,7 +1,7 @@
 // "Send to GitLab as Drafts…": an agent review's findings as draft notes on the merge request. Nothing is published;
-// you submit the review in GitLab or the IDE. Through `glab api` when glab is signed in to the host, else REST with a
-// token you enter. The findings are the agent's output: draftsFor() only takes files the merge request changes, and
-// note texts lose quick actions and mentions. No IntelliJ imports.
+// you submit the review in GitLab or the IDE. Through `glab api` when glab is signed in to the host, else REST with the
+// IDE's GitLab account or a token you enter. The findings are the agent's output: draftsFor() only takes files the
+// merge request changes, and note texts lose quick actions and mentions. No IntelliJ imports.
 package io.github.tezmanian.herdrcockpit
 
 import com.google.gson.JsonObject
@@ -52,13 +52,13 @@ class GlabApi(private val glab: String, private val host: String, private val en
     }
 }
 
-/** REST with a personal access token (scope api). */
+/** REST with an access token (scope api); Bearer takes personal access tokens and OAuth tokens alike. */
 class RestApi(private val base: String, private val token: String) : GitLabApi {
     private val http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
 
     override fun call(method: String, path: String, body: String?): String {
         val req = HttpRequest.newBuilder(URI.create("$base/$path")).timeout(Duration.ofSeconds(30))
-            .header("PRIVATE-TOKEN", token).header("Content-Type", "application/json")
+            .header("Authorization", "Bearer $token").header("Content-Type", "application/json")
             .method(method, body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody()).build()
         val res = try { http.send(req, HttpResponse.BodyHandlers.ofString()) } catch (e: Exception) { throw GitLabError("${e.message}") }
         if (res.statusCode() !in 200..299) throw GitLabError("HTTP ${res.statusCode()}: ${res.body().take(300)}", res.statusCode())
@@ -66,11 +66,9 @@ class RestApi(private val base: String, private val token: String) : GitLabApi {
     }
 }
 
-/** The glab binary if it's installed and signed in to `host`, else null. */
-fun signedInGlab(host: String): String? {
-    val glab = findTool("glab").takeIf(::binaryFound) ?: return null
-    return glab.takeIf { exec(listOf(it, "auth", "status", "--hostname", host), System.getenv(), null, 10)?.first == 0 }
-}
+/** `glab` (a path or bare name) if it's installed and signed in to `host`, else null. */
+fun signedInGlab(glab: String, host: String): String? =
+    glab.takeIf { binaryFound(it) && exec(listOf(it, "auth", "status", "--hostname", host), System.getenv(), null, 10)?.first == 0 }
 
 /** A command's (exit code, stdout, stderr) with `input` on stdin; null if it can't run or times out. */
 private fun exec(cmd: List<String>, env: Map<String, String>, input: String?, timeoutSec: Long = 60): Triple<Int, String, String>? = try {

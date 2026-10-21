@@ -57,6 +57,10 @@ class HerdrSettingsState : BaseState() {
             "general: Explain what this does and point out anything risky.\n" +
             "general: Write unit tests for this.\n"
     )
+    /** Paths to the forge CLIs; empty = look in the usual install folders, then PATH. */
+    var glabPath by string("")
+    var ghPath by string("")
+    var teaPath by string("")
     /** Kiro's monthly credit allowance (Kiro doesn't store it locally); 0 = unknown, no bar. */
     var kiroMonthlyCredits by property(0)
 }
@@ -66,6 +70,8 @@ class HerdrSettingsState : BaseState() {
 class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSettingsState()) {
     companion object {
         fun get(): HerdrSettingsState = service<HerdrSettings>().state
+
+        fun forgeClis() = get().let { ForgeClis(resolveTool("glab", it.glabPath), resolveTool("gh", it.ghPath), resolveTool("tea", it.teaPath)) }
     }
 }
 
@@ -81,6 +87,14 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row("Socket:") {
                     textField().bindText({ s.socketPath ?: "" }, { s.socketPath = it }).columns(COLUMNS_LARGE)
                         .comment("Empty: HERDR_SOCKET_PATH, HERDR_SESSION, else ~/.config/herdr/herdr.sock. A …/sessions/&lt;name&gt;/herdr.sock path selects that session.")
+                }
+            }
+            group("Review tools") {
+                row("glab:") { textField().bindText({ s.glabPath ?: "" }, { s.glabPath = it }).columns(COLUMNS_LARGE) }
+                row("gh:") { textField().bindText({ s.ghPath ?: "" }, { s.ghPath = it }).columns(COLUMNS_LARGE) }
+                row("tea:") {
+                    textField().bindText({ s.teaPath ?: "" }, { s.teaPath = it }).columns(COLUMNS_LARGE)
+                        .comment("The GitLab, GitHub and Gitea CLIs. One signed in to a repository's host tells which kind of server it is, and glab sends a review there. Empty: the usual folders, then PATH.")
                 }
             }
             group("Starting Herdr") {

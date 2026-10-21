@@ -139,8 +139,8 @@ class GitLabDraftsTest {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         val seen = mutableListOf<String>()
         server.createContext("/api/v4/") { ex ->
-            seen += "${ex.requestMethod} ${ex.requestURI} ${ex.requestHeaders.getFirst("PRIVATE-TOKEN")} ${ex.requestBody.readAllBytes().decodeToString()}"
-            val (code, body) = if (ex.requestHeaders.getFirst("PRIVATE-TOKEN") == "good") 201 to "{}" else 401 to "{\"message\":\"401 Unauthorized\"}"
+            seen += "${ex.requestMethod} ${ex.requestURI} ${ex.requestHeaders.getFirst("Authorization")} ${ex.requestBody.readAllBytes().decodeToString()}"
+            val (code, body) = if (ex.requestHeaders.getFirst("Authorization") == "Bearer good") 201 to "{}" else 401 to "{\"message\":\"401 Unauthorized\"}"
             ex.sendResponseHeaders(code, body.length.toLong())
             ex.responseBody.use { it.write(body.toByteArray()) }
         }
@@ -148,7 +148,7 @@ class GitLabDraftsTest {
         try {
             val base = "http://127.0.0.1:${server.address.port}/api/v4"
             assertEquals("{}", RestApi(base, "good").call("POST", "projects/group%2Fapp/merge_requests/7/draft_notes", "{\"note\":\"n\"}"))
-            assertEquals("POST /api/v4/projects/group%2Fapp/merge_requests/7/draft_notes good {\"note\":\"n\"}", seen.single())
+            assertEquals("POST /api/v4/projects/group%2Fapp/merge_requests/7/draft_notes Bearer good {\"note\":\"n\"}", seen.single())
             try {
                 RestApi(base, "bad").call("GET", "projects/x", null)
                 fail("401 must throw")

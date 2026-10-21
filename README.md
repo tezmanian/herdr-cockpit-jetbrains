@@ -58,8 +58,12 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   GitLab or the IDE. A preview lists what goes where, each with a checkbox. Only findings on files the merge request
   changes are sent; one on a line outside the diff becomes a draft on the whole merge request naming the file and
   line. Quick actions (`/merge` at a line start) and mentions in the agent's text are defused. It uses `glab api` when
-  `glab` is installed and signed in to the remote's host, otherwise a personal access token (scope `api`) that it asks
-  for once and keeps in the IDE's password safe (forgotten when GitLab rejects it).
+  `glab` is installed and signed in to the remote's host, else the IDE's own GitLab account for that host
+  (Settings | Version Control | GitLab), else a personal access token (scope `api`) that it asks for once and keeps in
+  the IDE's password safe (forgotten when GitLab rejects it). The entry only appears when the remote is certainly a
+  GitLab: the review came from the GitLab tool window, the host is gitlab.com, `glab` is signed in to it, or the server
+  answers like GitLab. A host that's GitHub, Gitea or unknown gets no entry. Paths to `glab`, `gh` and `tea` can be set
+  under Settings | Tools | Herdr Cockpit | Review tools.
   **Limit:** with `glab` signed in, an agent in a Herdr pane runs as the same user and can call `glab` itself, so it
   could post or publish on its own. Only with the token (and `glab` signed out) does the token never reach the agents.
 - **Saved prompts** (setting "Prompts", one `category: text` per line): the prompt dialogs offer them as presets that
@@ -147,6 +151,7 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `Usage.kt` | plan usage of Claude Code, Codex and Kiro from their local files (port of `usage.ts`) |
 | `AgentReview.kt` | "Review Branch with Agent…": the prompt and the findings file (`parseReview()` checks the agent's output) |
 | `GitLabDrafts.kt` | "Send to GitLab as Drafts…": merge request lookup, draft notes, `glab api` or REST with a token |
+| `Forge.kt` | Which kind of server a remote is (GitLab, GitHub, Gitea): known hosts, signed-in CLIs, one anonymous request |
 | `ClaudeSessions.kt` | Claude Code's saved sessions for a folder, for "Switch Claude Session…" |
 | `GitInfo.kt` | git CLI with the upstream's hardening (no fsmonitor, filters, hooks, lazy fetch); skipped in untrusted projects |
 | `ViewState.kt` | JSON for `media/panel.js` (same shape as the VS Code extension's `viewState.ts`) |
