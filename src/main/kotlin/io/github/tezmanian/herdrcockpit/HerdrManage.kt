@@ -2,6 +2,8 @@
 // Every new pane opens straight away in an editor tab; an agent is then started in it, in the background.
 package io.github.tezmanian.herdrcockpit
 
+import com.intellij.credentialStore.CredentialAttributes
+import com.intellij.credentialStore.generateServiceName
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffDialogHints
 import com.intellij.diff.DiffManager
@@ -11,6 +13,8 @@ import com.intellij.diff.contents.DiffContent
 import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.icons.AllIcons
+import com.intellij.ide.BrowserUtil
+import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.ide.trustedProjects.TrustedProjects
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -31,6 +35,7 @@ import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.util.UserDataHolder
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.ui.CheckBoxList
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.dsl.builder.Align
@@ -334,7 +339,8 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         }
     }
 
-    private class PendingReview(val root: String, val out: File, val since: Long)
+    /** A review an agent owes: where it writes, and the branch (if any) and commit it reviews, to find the merge request. */
+    private class PendingReview(val root: String, val out: File, val since: Long, val branch: String?, val head: String?)
     private val reviews = ConcurrentHashMap<String, PendingReview>()
 
     /** Asks the agent to review its folder's branch against a target and write findings to a file; nothing is posted. */
@@ -346,13 +352,14 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
             val root = gitRoot(cwd) ?: return@run service.notify("$cwd is not inside a git repository.", NotificationType.INFORMATION)
             val branch = gitBranch(root) ?: return@run service.notify("${File(root).name} is not on a branch.", NotificationType.INFORMATION)
             val default = gitDefaultBranch(root) ?: "main"
+            val head = gitHead(root)
             later {
                 val target = input("Review $branch with $name", "Compare $branch against (branch or ref):", default) {
                     if (!isValidBranch(it)) "Not a valid branch name" else null
                 } ?: return@later
                 val out = reviewFile(File(System.getProperty("user.home")), space.label, branch)
                 val extra = reviewInstructions(name) ?: return@later
-                startReview(name, pane.id, root, out, reviewPrompt(root, branch, target, out, extra))
+                startReview(name, pane.id, PendingReview(root, out, System.currentTimeMillis(), branch, head), reviewPrompt(root, branch, target, out, extra))
             }
         }
     }
@@ -375,7 +382,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
                     Item("$name (${a.status ?: AgentStatus.unknown})", null) {
                         val out = reviewFile(File(System.getProperty("user.home")), s.label, "mr-" + head.take(12))
                         val extra = reviewInstructions(name) ?: return@Item
-                        startReview(name, a.id, root, out, reviewChangesPrompt(root, base, head, paths, out, extra))
+                        startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head), reviewChangesPrompt(root, base, head, paths, out, extra))
                     }
                 })
             }
@@ -412,10 +419,10 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         return if (dialog.showAndGet()) area.text.trim() else null
     }
 
-    private fun startReview(name: String, paneId: String, root: String, out: File, text: String) = run("Review with $name") {
-        out.parentFile.mkdirs()
-        out.delete()
-        reviews[paneId] = PendingReview(root, out, System.currentTimeMillis())
+    private fun startReview(name: String, paneId: String, review: PendingReview, text: String) = run("Review with $name") {
+        review.out.parentFile.mkdirs()
+        review.out.delete()
+        reviews[paneId] = review
         try {
             actions.promptAgent(paneId, text)
         } catch (e: HerdrError) {
@@ -434,23 +441,100 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         val findings = parseReview(r.out.readText(), File(r.root))
             ?: return service.notify("$name's review in ${r.out} isn't a JSON array of findings.", NotificationType.WARNING)
         if (findings.isEmpty()) return service.notify("$name's review: no findings.", NotificationType.INFORMATION)
+        // A GitHub remote certainly isn't GitLab; any other host may be a self-hosted one.
+        val gitlab = gitRemoteUrl(r.root)?.let(::gitlabProject)?.takeIf { it.host != "github.com" }
         later {
-            com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
+            val n = com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
                 .createNotification("$name's review: ${findings.size} finding${if (findings.size > 1) "s" else ""}", NotificationType.INFORMATION)
-                .addAction(com.intellij.notification.NotificationAction.createSimple("Show") { showFindings(name, r.root, findings) })
-                .notify(project)
+                .addAction(com.intellij.notification.NotificationAction.createSimple("Show") { showFindings(name, r, findings, gitlab) })
+            if (gitlab != null) n.addAction(com.intellij.notification.NotificationAction.createSimple("Send to GitLab as Drafts…") { sendToGitLab(r, gitlab, findings) })
+            n.notify(project)
         }
     }
 
-    private fun showFindings(name: String, root: String, findings: List<Finding>) {
-        choose("Review by $name", findings.map { f ->
-            Item("${f.path}:${f.line}  ${f.body.lineSequence().first().take(120)}", null) {
-                val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath("$root/${f.path}")
+    private fun showFindings(name: String, r: PendingReview, findings: List<Finding>, gitlab: GitLabProject?) {
+        val send = listOfNotNull(gitlab?.let { Item("Send to GitLab as Drafts…", AllIcons.Actions.Upload) { sendToGitLab(r, it, findings) } })
+        choose("Review by $name", send + findings.mapIndexed { i, f ->
+            Item("${f.path}:${f.line}  ${f.body.lineSequence().first().take(120)}", null, if (i == 0 && send.isNotEmpty()) "Findings" else null) {
+                val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath("${r.root}/${f.path}")
                     ?: return@Item service.notify("${f.path} doesn't exist (any more).", NotificationType.WARNING)
                 OpenFileDescriptor(project, vf, f.line - 1, 0).navigate(true)
                 service.notify("${f.path}:${f.line}: ${f.body}", NotificationType.INFORMATION)
             }
         })
+    }
+
+    private fun tokenKey(host: String) = CredentialAttributes(generateServiceName("Herdr Cockpit", "GitLab token for $host"))
+
+    /** Findings as draft notes on the merge request: through glab when it's signed in to the host, else with a token. */
+    private fun sendToGitLab(r: PendingReview, gitlab: GitLabProject, findings: List<Finding>) = run("Send review to GitLab") {
+        val glab = signedInGlab(gitlab.host)
+        if (glab != null) return@run prepareDrafts(GlabApi(glab, gitlab.host), "glab", r, gitlab, findings)
+        val token = PasswordSafe.instance.getPassword(tokenKey(gitlab.host))
+        if (token != null) return@run prepareDrafts(RestApi("https://${gitlab.host}/api/v4", token), "your token", r, gitlab, findings)
+        later {
+            val entered = Messages.showPasswordDialog(project,
+                "glab isn't installed or not signed in to ${gitlab.host}. Sign in with `glab auth login --hostname ${gitlab.host}`, " +
+                    "or enter a personal access token with scope api here (kept in the IDE's password safe):",
+                "GitLab Token for ${gitlab.host}", null)?.trim()?.ifEmpty { null } ?: return@later
+            run("Send review to GitLab") {
+                PasswordSafe.instance.setPassword(tokenKey(gitlab.host), entered)
+                prepareDrafts(RestApi("https://${gitlab.host}/api/v4", entered), "your token", r, gitlab, findings)
+            }
+        }
+    }
+
+    /** Finds the merge request, then shows which findings would go there. Background thread. */
+    private fun prepareDrafts(api: GitLabApi, via: String, r: PendingReview, gitlab: GitLabProject, findings: List<Finding>) {
+        val mr = try {
+            findMergeRequest(api, gitlab, r.branch, r.head)
+        } catch (e: GitLabError) {
+            // A token GitLab rejects is forgotten, so the next try asks again.
+            if (via != "glab" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
+            throw e
+        } ?: return service.notify("No open merge request on ${gitlab.host} for ${r.branch ?: "these changes"}.", NotificationType.INFORMATION)
+        val drafts = draftsFor(findings, mr)
+        if (drafts.isEmpty()) return service.notify("None of the findings is on a file merge request !${mr.iid} changes.", NotificationType.INFORMATION)
+        later { previewDrafts(api, via, r, gitlab, mr, drafts, findings.size - drafts.size) }
+    }
+
+    /** What would be sent, each finding with a checkbox; OK posts the checked ones as drafts. */
+    private fun previewDrafts(api: GitLabApi, via: String, r: PendingReview, gitlab: GitLabProject, mr: MergeRequest,
+                              drafts: List<Pair<Finding, String>>, left: Int) {
+        val list = CheckBoxList<Finding>().apply {
+            drafts.forEach { (f, _) -> addItem(f, "${f.path}:${f.line}  ${f.body.lineSequence().first().take(120)}", true) }
+        }
+        val notes = listOfNotNull(
+            "Draft notes on !${mr.iid} ${mr.title} (via $via). Nothing is published: you submit the review in GitLab or the IDE.",
+            "Findings on lines outside the diff become drafts on the merge request that name the file and line.",
+            if (left > 0) "$left finding${if (left > 1) "s" else ""} on files the merge request doesn't change are left out." else null,
+            if (r.head != null && r.head != mr.headSha) "The review saw ${r.head.take(8)}, the merge request is at ${mr.headSha.take(8)}: lines may be off." else null,
+        )
+        val content = panel {
+            notes.forEach { row { text(it, maxLineLength = 100) } }
+            row { scrollCell(list).align(Align.FILL) }.resizableRow()
+        }
+        val dialog = object : DialogWrapper(project) {
+            init { title = "Send to GitLab as Drafts"; setOKButtonText("Send Drafts"); init() }
+            override fun createCenterPanel() = content
+        }
+        if (!dialog.showAndGet()) return
+        val chosen = drafts.filter { list.isItemSelected(it.first) }
+        if (chosen.isEmpty()) return
+        run("Sending drafts to !${mr.iid}") {
+            val n = try {
+                sendDrafts(api, gitlab, mr, chosen)
+            } catch (e: GitLabError) {
+                if (via != "glab" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
+                throw e
+            }
+            later {
+                com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
+                    .createNotification("$n draft${if (n > 1) "s" else ""} on !${mr.iid}; submit the review to publish them.", NotificationType.INFORMATION)
+                    .addAction(com.intellij.notification.NotificationAction.createSimple("Open Merge Request") { BrowserUtil.browse(mr.url) })
+                    .notify(project)
+            }
+        }
     }
 
     /** One file's diff, built when the diff viewer gets to it (off the EDT). */

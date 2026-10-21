@@ -53,6 +53,15 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   With the GitLab plugin, **Review with Agent…** is also in the context menu of a merge request's changes in the GitLab
   tool window: the agent reviews those files between the merge request's commits, without checking out its branch.
   Both ask for optional extra instructions first.
+  **Send to GitLab as Drafts…** (in the findings notification and list, opt-in per review): the findings become draft
+  notes on the open merge request of that branch (or of those commits). Nothing is published: you submit the review in
+  GitLab or the IDE. A preview lists what goes where, each with a checkbox. Only findings on files the merge request
+  changes are sent; one on a line outside the diff becomes a draft on the whole merge request naming the file and
+  line. Quick actions (`/merge` at a line start) and mentions in the agent's text are defused. It uses `glab api` when
+  `glab` is installed and signed in to the remote's host, otherwise a personal access token (scope `api`) that it asks
+  for once and keeps in the IDE's password safe (forgotten when GitLab rejects it).
+  **Limit:** with `glab` signed in, an agent in a Herdr pane runs as the same user and can call `glab` itself, so it
+  could post or publish on its own. Only with the token (and `glab` signed out) does the token never reach the agents.
 - **Saved prompts** (setting "Prompts", one `category: text` per line): the prompt dialogs offer them as presets that
   fill the text: `review` in the reviews, `general` in Send to Agent… and Hand Off to Agent….
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
@@ -137,6 +146,7 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `Activity.kt` | shell/agent summaries from `pane.process_info` + `pane.read` |
 | `Usage.kt` | plan usage of Claude Code, Codex and Kiro from their local files (port of `usage.ts`) |
 | `AgentReview.kt` | "Review Branch with Agent…": the prompt and the findings file (`parseReview()` checks the agent's output) |
+| `GitLabDrafts.kt` | "Send to GitLab as Drafts…": merge request lookup, draft notes, `glab api` or REST with a token |
 | `ClaudeSessions.kt` | Claude Code's saved sessions for a folder, for "Switch Claude Session…" |
 | `GitInfo.kt` | git CLI with the upstream's hardening (no fsmonitor, filters, hooks, lazy fetch); skipped in untrusted projects |
 | `ViewState.kt` | JSON for `media/panel.js` (same shape as the VS Code extension's `viewState.ts`) |

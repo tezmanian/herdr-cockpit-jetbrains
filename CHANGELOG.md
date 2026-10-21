@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.16
+- Send to GitLab as Drafts…: an agent review's findings become draft notes on the merge request (via `glab` when it's
+  signed in, otherwise with a personal access token kept in the password safe). A preview picks what to send; nothing
+  is published until you submit the review.
+
 ## 0.1.15
 - Fixed a ClassCastException in the new UI when the tool window icon shows the red "blocked" dot.
 
