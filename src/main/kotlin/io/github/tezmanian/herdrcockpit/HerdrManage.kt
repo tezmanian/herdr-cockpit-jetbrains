@@ -351,7 +351,8 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
                     if (!isValidBranch(it)) "Not a valid branch name" else null
                 } ?: return@later
                 val out = reviewFile(File(System.getProperty("user.home")), space.label, branch)
-                startReview(name, pane.id, root, out, reviewPrompt(root, branch, target, out))
+                val extra = reviewInstructions(name) ?: return@later
+                startReview(name, pane.id, root, out, reviewPrompt(root, branch, target, out, extra))
             }
         }
     }
@@ -373,12 +374,17 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
                     val name = editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)
                     Item("$name (${a.status ?: AgentStatus.unknown})", null) {
                         val out = reviewFile(File(System.getProperty("user.home")), s.label, "mr-" + head.take(12))
-                        startReview(name, a.id, root, out, reviewChangesPrompt(root, base, head, paths, out))
+                        val extra = reviewInstructions(name) ?: return@Item
+                        startReview(name, a.id, root, out, reviewChangesPrompt(root, base, head, paths, out, extra))
                     }
                 })
             }
         }
     }
+
+    /** Optional extra instructions for the review ("" when left empty); null when cancelled. */
+    private fun reviewInstructions(name: String): String? =
+        Messages.showMultilineInputDialog(project, "Anything $name should look at in particular? (optional, e.g. \"focus on security\")", "Review with $name", "", null, null)?.trim()
 
     private fun startReview(name: String, paneId: String, root: String, out: File, text: String) = run("Review with $name") {
         out.parentFile.mkdirs()

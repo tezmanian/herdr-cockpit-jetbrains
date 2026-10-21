@@ -4,6 +4,7 @@
 - Review with Agent… in PhpStorm's GitLab tool window: right-click a merge request's changes (or some of its files);
   an agent you pick reviews exactly those changes between the merge request's commits, without checking out its
   branch. Findings come back as with Review Branch with Agent…; nothing is posted.
+- Both reviews ask for optional extra instructions (e.g. "focus on security") before sending.
 
 ## 0.1.13
 - Review Branch with Agent…: right-click an agent to have it review its folder's branch against another branch

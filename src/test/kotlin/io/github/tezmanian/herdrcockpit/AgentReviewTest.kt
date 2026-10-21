@@ -53,4 +53,12 @@ class AgentReviewTest {
         assertNull(changeRange(listOf(null to b)))
         assertNull(changeRange(listOf(a to a)))
     }
+
+    @Test
+    fun extraInstructionsComeBeforeTheRules() {
+        val out = File(root, "r.json")
+        val p = reviewPrompt("/repo", "feat", "origin/main", out, " focus on SQL ")
+        assert(p.contains("Also: focus on SQL\n\nOnly read:")) { p }
+        assert(!reviewPrompt("/repo", "feat", "origin/main", out).contains("Also:"))
+    }
 }

@@ -12,18 +12,20 @@ data class Finding(val path: String, val line: Int, val body: String)
 fun reviewFile(home: File, space: String, branch: String): File =
     File(home, ".herdr-cockpit/reviews/" + "$space-$branch".replace(Regex("[^A-Za-z0-9._-]+"), "_") + ".json")
 
-fun reviewPrompt(root: String, branch: String, target: String, out: File) =
+fun reviewPrompt(root: String, branch: String, target: String, out: File, extra: String = "") =
     "Review the changes of branch $branch against $target in $root: run `git diff $target...HEAD` there and read the " +
-        "code around them. " + reviewRules(out)
+        "code around them. " + reviewRules(out, extra)
 
 /** A merge request's changes picked in the IDE: `base`..`head` limited to `paths` (relative to `root`). */
-fun reviewChangesPrompt(root: String, base: String, head: String, paths: List<String>, out: File) =
+fun reviewChangesPrompt(root: String, base: String, head: String, paths: List<String>, out: File, extra: String = "") =
     "Review these merge request changes in $root: run `git diff $base $head -- ${paths.joinToString(" ") { "'$it'" }}` " +
         "there (if git doesn't know the commits, fetch them first, e.g. `git fetch origin`) and read the code around " +
-        "them as of $head (`git show $head:<path>`); line numbers refer to $head. " + reviewRules(out)
+        "them as of $head (`git show $head:<path>`); line numbers refer to $head. " + reviewRules(out, extra)
 
-private fun reviewRules(out: File) =
-    "Only read: don't edit or create files other than the one below, don't commit, push or post comments anywhere. " +
+/** Your own instructions (if any), then what the agent may do and where it writes. */
+private fun reviewRules(out: File, extra: String) =
+    (if (extra.isBlank()) "" else "Also: ${extra.trim()}\n\n") +
+        "Only read: don't edit or create files other than the one below, don't commit, push or post comments anywhere. " +
         "Write your findings to $out as a JSON array and nothing else: " +
         """[{"path": "file relative to the repo root", "line": line number in the reviewed version, "body": "the finding"}]""" +
         ", or [] if you found nothing."
