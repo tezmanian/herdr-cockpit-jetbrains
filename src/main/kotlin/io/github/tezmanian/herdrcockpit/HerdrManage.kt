@@ -531,15 +531,33 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         }
     }
 
-    /** Finds the merge request, then shows which findings would go there. Background thread. */
+    /** Finds the merge request (asks when several fit), then shows which findings would go there. Background thread. */
     private fun prepareDrafts(api: GitLabApi, via: String, r: PendingReview, gitlab: GitLabProject, findings: List<Finding>) {
-        val mr = try {
-            findMergeRequest(api, gitlab, r.branch, r.head)
-        } catch (e: GitLabError) {
-            // A token GitLab rejects is forgotten, so the next try asks again.
-            if (via == "your token" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
-            throw e
-        } ?: return service.notify("No open merge request on ${gitlab.host} for ${r.branch ?: "these changes"}.", NotificationType.INFORMATION)
+        val candidates = forgetRejected(via, gitlab) { mergeRequestCandidates(api, gitlab, r.branch, r.head) }
+        when (candidates.size) {
+            0 -> service.notify("No open merge request on ${gitlab.host} for ${r.branch ?: "these changes"}.", NotificationType.INFORMATION)
+            1 -> previewFor(api, via, r, gitlab, findings, candidates[0].iid)
+            else -> later {
+                choose("Which Merge Request?", candidates.map { c ->
+                    Item("!${c.iid} ${c.title}  (${c.source} → ${c.target})", null) {
+                        run("Send review to GitLab") { previewFor(api, via, r, gitlab, findings, c.iid) }
+                    }
+                })
+            }
+        }
+    }
+
+    /** A token GitLab rejects is forgotten, so the next try asks again. */
+    private fun <T> forgetRejected(via: String, gitlab: GitLabProject, call: () -> T): T = try {
+        call()
+    } catch (e: GitLabError) {
+        if (via == "your token" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
+        throw e
+    }
+
+    /** Loads merge request `iid` and shows which findings would go there. Background thread. */
+    private fun previewFor(api: GitLabApi, via: String, r: PendingReview, gitlab: GitLabProject, findings: List<Finding>, iid: Int) {
+        val mr = forgetRejected(via, gitlab) { loadMergeRequest(api, gitlab, iid) }
         val drafts = draftsFor(findings, mr)
         if (drafts.isEmpty()) return service.notify("None of the findings is on a file merge request !${mr.iid} changes.", NotificationType.INFORMATION)
         later { previewDrafts(api, via, r, gitlab, mr, drafts, findings.size - drafts.size) }
@@ -569,12 +587,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         val chosen = drafts.filter { list.isItemSelected(it.first) }
         if (chosen.isEmpty()) return
         run("Sending drafts to !${mr.iid}") {
-            val n = try {
-                sendDrafts(api, gitlab, mr, chosen)
-            } catch (e: GitLabError) {
-                if (via == "your token" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
-                throw e
-            }
+            val n = forgetRejected(via, gitlab) { sendDrafts(api, gitlab, mr, chosen) }
             later {
                 com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
                     .createNotification("$n draft${if (n > 1) "s" else ""} on !${mr.iid}; submit the review to publish them.", NotificationType.INFORMATION)

@@ -8,6 +8,8 @@
 - The send entry only appears for a GitLab: the plugin tells GitLab, GitHub and Gitea apart (known hosts, `glab`/`gh`/
   `tea` signed in to the host, else one anonymous request to the server). Paths to these CLIs can be set in Settings |
   Tools | Herdr Cockpit | Review tools.
+- The merge request is the one GitLab lists for the reviewed commit; when several fit (e.g. two from one branch), you
+  pick one instead of the plugin taking the first.
 
 ## 0.1.15
 - Fixed a ClassCastException in the new UI when the tool window icon shows the red "blocked" dot.

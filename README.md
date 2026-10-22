@@ -54,8 +54,9 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   tool window: the agent reviews those files between the merge request's commits, without checking out its branch.
   Both ask for optional extra instructions first.
   **Send to GitLab as Drafts…** (in the findings notification and list, opt-in per review): the findings become draft
-  notes on the open merge request of that branch (or of those commits). Nothing is published: you submit the review in
-  GitLab or the IDE. A preview lists what goes where, each with a checkbox. Only findings on files the merge request
+  notes on the open merge request of that branch (or of those commits). The merge request whose head is the reviewed
+  commit wins; when several fit (two merge requests from one branch, the reviewed commit not pushed), you choose.
+  Nothing is published: you submit the review in GitLab or the IDE. A preview lists what goes where, each with a checkbox. Only findings on files the merge request
   changes are sent; one on a line outside the diff becomes a draft on the whole merge request naming the file and
   line. Quick actions (`/merge` at a line start) and mentions in the agent's text are defused. It uses `glab api` when
   `glab` is installed and signed in to the remote's host, else the IDE's own GitLab account for that host

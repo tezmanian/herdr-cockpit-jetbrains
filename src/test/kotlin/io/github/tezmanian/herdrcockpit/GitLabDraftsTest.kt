@@ -8,7 +8,6 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.io.File
@@ -89,28 +88,43 @@ class GitLabDraftsTest {
         }
     }
 
-    private fun fakeGitLab(): GitLabApi {
-        val calls = mutableListOf<String>()
-        return GitLabApi { method, path, _ ->
-            calls += "$method $path"
-            when {
-                path.startsWith("projects/group%2Fsub%2Fapp/merge_requests?") ->
-                    """[{"iid": 6, "sha": "other", "source_branch": "x"}, {"iid": 7, "sha": "h", "source_branch": "feature/y"}]"""
-                path == "projects/group%2Fsub%2Fapp/merge_requests/7" ->
-                    """{"iid": 7, "title": "Feature", "web_url": "u", "diff_refs": {"base_sha": "b", "start_sha": "s", "head_sha": "h"}}"""
-                path.startsWith("projects/group%2Fsub%2Fapp/merge_requests/7/diffs?") ->
-                    """[{"old_path": "o.kt", "new_path": "n.kt", "diff": "@@ -1 +1 @@\n-a\n+b\n"}, {"old_path": "gone.kt", "new_path": "gone.kt", "deleted_file": true, "diff": ""}]"""
-                else -> throw GitLabError("unexpected $path", 404)
-            }
+    private val p = "projects/group%2Fsub%2Fapp"
+
+    /** A GitLab with MR 7 (feature/y, head h), MR 8 (feature/y into release, head h2), MR 9 (feature/z, contains old). */
+    private val fakeGitLab = GitLabApi { _, path, _ ->
+        fun mr(iid: Int, src: String, sha: String, state: String = "opened") =
+            """{"iid": $iid, "title": "T$iid", "source_branch": "$src", "target_branch": "main", "sha": "$sha", "state": "$state"}"""
+        when (path) {
+            "$p/repository/commits/h/merge_requests?state=opened" -> "[${mr(7, "feature/y", "h")}]"
+            "$p/repository/commits/old/merge_requests?state=opened" -> "[${mr(9, "feature/z", "new")}, ${mr(5, "x", "o", "merged")}]"
+            "$p/merge_requests?state=opened&per_page=100&source_branch=feature%2Fy" -> "[${mr(7, "feature/y", "h")}, ${mr(8, "feature/y", "h2")}]"
+            "$p/merge_requests/7" -> """{"iid": 7, "title": "Feature", "web_url": "u", "diff_refs": {"base_sha": "b", "start_sha": "s", "head_sha": "h"}}"""
+            "$p/merge_requests/7/diffs?per_page=100&page=1" ->
+                """[{"old_path": "o.kt", "new_path": "n.kt", "diff": "@@ -1 +1 @@\n-a\n+b\n"}, {"old_path": "gone.kt", "new_path": "gone.kt", "deleted_file": true, "diff": ""}]"""
+            else -> throw GitLabError("HTTP 404", 404) // e.g. a commit that was never pushed
         }
     }
 
     @Test
-    fun findsTheMergeRequestByHeadOrBranch() {
-        val byHead = findMergeRequest(fakeGitLab(), project, null, "h")!!
-        assertEquals(MergeRequest(7, "Feature", "u", "b", "s", "h", mapOf("n.kt" to ("o.kt" to mapOf(1 to null)))), byHead)
-        assertEquals(7, findMergeRequest(fakeGitLab(), project, "feature/y", "not pushed")!!.iid)
-        assertNull(findMergeRequest(fakeGitLab(), project, null, "unknown"))
+    fun candidatesBestFirstAndNeverGuessed() {
+        // The reviewed head decides, even when the branch has a second merge request.
+        assertEquals(listOf(7), mergeRequestCandidates(fakeGitLab, project, "feature/y", "h").map { it.iid })
+        // Head not pushed: both merge requests from the branch, for the user to choose.
+        assertEquals(listOf(7, 8), mergeRequestCandidates(fakeGitLab, project, "feature/y", "unpushed").map { it.iid })
+        // From the GitLab tool window (no branch), pushed to since: the open one containing the commit.
+        assertEquals(listOf(9), mergeRequestCandidates(fakeGitLab, project, null, "old").map { it.iid })
+        assertEquals(emptyList<Int>(), mergeRequestCandidates(fakeGitLab, project, null, "unknown").map { it.iid })
+        try {
+            mergeRequestCandidates({ _, _, _ -> throw GitLabError("HTTP 401", 401) }, project, null, "h")
+            fail("401 must not read as no merge request")
+        } catch (e: GitLabError) {
+            assertEquals(401, e.status)
+        }
+    }
+
+    @Test
+    fun loadsTheMergeRequest() {
+        assertEquals(MergeRequest(7, "Feature", "u", "b", "s", "h", mapOf("n.kt" to ("o.kt" to mapOf(1 to null)))), loadMergeRequest(fakeGitLab, project, 7))
     }
 
     @Test
@@ -125,12 +139,12 @@ class GitLabDraftsTest {
         assertEquals(listOf("api", "--hostname", "gitlab.example.com", "--method", "POST", "-H", "Content-Type: application/json",
             "--input", "-", "projects/p/merge_requests/7/draft_notes", "---", "{\"note\":\"x; \$(rm -rf /)\"}"), log.readLines())
 
-        glab.writeText("#!/bin/sh\necho 'HTTP 404 Not Found' >&2\nexit 1\n")
+        glab.writeText("#!/bin/sh\necho 'glab: 404 Not Found (HTTP 404)' >&2\nexit 1\n")
         try {
             api.call("GET", "projects/p", null)
             fail("a failing glab must throw")
         } catch (e: GitLabError) {
-            assertTrue(e.message!!.contains("404"))
+            assertEquals(404, e.status)
         }
     }
 

@@ -47,7 +47,10 @@ class GlabApi(private val glab: String, private val host: String, private val en
         val cmd = listOf(glab, "api", "--hostname", host, "--method", method) +
             (if (body != null) listOf("-H", "Content-Type: application/json", "--input", "-") else emptyList()) + path
         val (code, out, err) = exec(cmd, env, body) ?: throw GitLabError("glab didn't answer")
-        if (code != 0) throw GitLabError("glab: " + err.ifBlank { out }.trim().take(300))
+        if (code != 0) {
+            val msg = err.ifBlank { out }.trim()
+            throw GitLabError("glab: " + msg.take(300), Regex("""HTTP (\d{3})""").find(msg)?.groupValues?.get(1)?.toInt())
+        }
         return out
     }
 }
@@ -98,12 +101,31 @@ data class MergeRequest(
     val files: Map<String, Pair<String, Map<Int, Int?>>>,
 )
 
-/** The open merge request whose head is `head`, else the one from `branch`; null when there's none. */
-fun findMergeRequest(api: GitLabApi, project: GitLabProject, branch: String?, head: String?): MergeRequest? {
-    val list = JsonParser.parseString(api.call("GET", "${project.api}/merge_requests?state=opened&per_page=100" +
-        (branch?.let { "&source_branch=" + enc(it) } ?: ""), null)).asJsonArray.map { it.asJsonObject }
-    val hit = list.firstOrNull { head != null && it.str("sha") == head } ?: list.firstOrNull { branch != null && it.str("source_branch") == branch } ?: return null
-    val iid = hit.get("iid").asInt
+/** An open merge request the review may belong to. */
+data class MergeRequestRef(val iid: Int, val title: String, val source: String, val target: String, val sha: String?)
+
+/**
+ * The open merge requests the review may belong to, best first: those whose head is `head`, else those from `branch`,
+ * else those that contain `head` (pushed to since). More than one is for the caller to choose from, never to guess.
+ */
+fun mergeRequestCandidates(api: GitLabApi, project: GitLabProject, branch: String?, head: String?): List<MergeRequestRef> {
+    fun list(path: String) = JsonParser.parseString(api.call("GET", path, null)).asJsonArray.map { it.asJsonObject }
+        .filter { it.str("state") == "opened" }
+        .map { MergeRequestRef(it.get("iid").asInt, it.str("title") ?: "", it.str("source_branch") ?: "", it.str("target_branch") ?: "", it.str("sha")) }
+    val withHead = head?.let {
+        try {
+            list("${project.api}/repository/commits/${enc(it)}/merge_requests?state=opened")
+        } catch (e: GitLabError) {
+            if (e.status == 404) emptyList() else throw e // a commit GitLab doesn't have (not pushed)
+        }
+    }.orEmpty()
+    val fromBranch = branch?.let { list("${project.api}/merge_requests?state=opened&per_page=100&source_branch=" + enc(it)) }.orEmpty()
+    return (withHead + fromBranch).distinctBy { it.iid }.filter { head != null && it.sha == head }
+        .ifEmpty { fromBranch }.ifEmpty { withHead }
+}
+
+/** Merge request `iid` with its diff commits and changed files. */
+fun loadMergeRequest(api: GitLabApi, project: GitLabProject, iid: Int): MergeRequest {
     val mr = JsonParser.parseString(api.call("GET", "${project.api}/merge_requests/$iid", null)).asJsonObject
     val refs = mr.get("diff_refs")?.takeIf { it.isJsonObject }?.asJsonObject ?: throw GitLabError("Merge request !$iid has no diff yet.")
     val files = linkedMapOf<String, Pair<String, Map<Int, Int?>>>()
