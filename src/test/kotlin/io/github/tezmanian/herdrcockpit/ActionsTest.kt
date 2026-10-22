@@ -207,10 +207,16 @@ class ActionsTest {
     }
 
     @Test
-    fun promptPresetsByCategory() {
-        val setting = "review: Focus on security\n\n  Review: only bugs \nExplain this\ngeneral: Write tests: unit ones\nother: x"
-        assertEquals(listOf("Focus on security", "only bugs"), promptPresets(setting, "review"))
-        assertEquals(listOf("Explain this", "Write tests: unit ones"), promptPresets(setting, "general"))
-        assertEquals(emptyList<String>(), promptPresets(null, "review"))
+    fun oldPromptLinesBecomeEntries() {
+        val setting = "review: Focus on security\n\n  Review: only bugs \nExplain this\ngeneral: Write tests: unit ones\n" +
+            "review: Focus on tests: missing cases, edge cases and the error paths"
+        assertEquals(listOf(
+            SavedPrompt("Focus on security", "review", "Focus on security"),
+            SavedPrompt("only bugs", "review", "only bugs"),
+            SavedPrompt("Explain this", "general", "Explain this"),
+            SavedPrompt("Write tests: unit ones", "general", "Write tests: unit ones"),
+            SavedPrompt("Focus on tests: missing cases, edge…", "review", "Focus on tests: missing cases, edge cases and the error paths"),
+        ), promptsFromLines(setting))
+        assertEquals(emptyList<SavedPrompt>(), promptsFromLines(null))
     }
 }

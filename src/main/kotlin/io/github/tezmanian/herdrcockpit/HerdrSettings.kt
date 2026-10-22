@@ -17,6 +17,7 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
+import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.rows
 import com.intellij.ui.dsl.builder.panel
@@ -49,7 +50,11 @@ class HerdrSettingsState : BaseState() {
     var closeTabInHerdr by string("never")
     /** Starting Herdr or opening the TUI creates a space for every project of the window (attached ones too) that has none. */
     var spacePerProject by property(false)
-    /** Saved prompts, one "category: text" per line ("review": the reviews, "general": Send to Agent and Hand Off). */
+    /** The prompt library (Settings | Tools | Herdr Cockpit | Prompts). */
+    var library by list<PromptEntry>()
+    /** Whether `prompts` was copied into `library` (once). */
+    var promptsMigrated by property(false)
+    /** Before the library: one "category: text" per line. Only read to fill the library once. */
     var prompts by string(
         "review: Focus on security: injection, authorization, secrets, unsafe input.\n" +
             "review: Only real bugs; skip style and naming.\n" +
@@ -70,6 +75,20 @@ class HerdrSettingsState : BaseState() {
 class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSettingsState()) {
     companion object {
         fun get(): HerdrSettingsState = service<HerdrSettings>().state
+
+        /** Your prompts; the first call turns the old one-per-line setting into entries. */
+        fun prompts(): List<SavedPrompt> {
+            val s = get()
+            if (!s.promptsMigrated) {
+                s.library = promptsFromLines(s.prompts).toEntries()
+                s.promptsMigrated = true
+            }
+            return s.library.toPrompts()
+        }
+
+        fun setPrompts(prompts: List<SavedPrompt>) {
+            get().library = prompts.toEntries()
+        }
 
         fun forgeClis() = get().let { ForgeClis(resolveTool("glab", it.glabPath), resolveTool("gh", it.ghPath), resolveTool("tea", it.teaPath)) }
     }
@@ -131,10 +150,14 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 }
             }
             group("Prompts") {
+                val table = PromptTable()
                 row {
-                    textArea().bindText({ s.prompts ?: "" }, { s.prompts = it }).rows(6).align(AlignX.FILL)
-                        .comment("Offered as presets in the prompt dialogs, one per line as \"category: text\". review: Review Branch with Agent… and Review with Agent…; general (or no category): Send to Agent… and Hand Off to Agent….")
-                }
+                    cell(table.component).align(Align.FILL)
+                        .comment("Offered as presets in the prompt dialogs. review: Review Branch with Agent… and Review with Agent…; general: Send to Agent… and Hand Off to Agent…. A project can add its own under Project Prompts.")
+                }.resizableRow()
+                onReset { table.prompts = HerdrSettings.prompts() }
+                onIsModified { table.prompts != HerdrSettings.prompts() }
+                onApply { HerdrSettings.setPrompts(table.prompts) }
             }
             group("New tabs") {
                 row("Agents:") {

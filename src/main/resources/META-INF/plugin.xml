@@ -22,6 +22,8 @@
         <fileIconProvider implementation="io.github.tezmanian.herdrcockpit.HerdrPaneIconProvider"/>
         <applicationConfigurable parentId="tools" instance="io.github.tezmanian.herdrcockpit.HerdrConfigurable"
                                  id="herdr.cockpit" displayName="Herdr Cockpit"/>
+        <projectConfigurable parentId="herdr.cockpit" instance="io.github.tezmanian.herdrcockpit.HerdrProjectPromptsConfigurable"
+                             id="herdr.cockpit.prompts" displayName="Project Prompts" nonDefaultProject="true"/>
         <statusBarWidgetFactory id="HerdrCockpit.Status" implementation="io.github.tezmanian.herdrcockpit.HerdrStatusBarFactory"/>
         <httpRequestHandler implementation="io.github.tezmanian.herdrcockpit.HerdrLinkService"/>
         <postStartupActivity implementation="io.github.tezmanian.herdrcockpit.HerdrLinkStartup"/>

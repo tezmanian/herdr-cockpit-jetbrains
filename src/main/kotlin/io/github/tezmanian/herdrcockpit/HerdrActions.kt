@@ -25,12 +25,17 @@ fun agentName(kind: String, taken: Collection<String>): String {
     return "$base-$n"
 }
 
-/** Your saved prompts (setting "Prompts", one "category: text" per line) of one category; lines without a category are "general". */
-fun promptPresets(setting: String?, category: String): List<String> =
-    (setting ?: "").lines().map { it.trim() }.filter { it.isNotEmpty() }.mapNotNull { line ->
+/** A saved prompt: `category` "review" (the reviews) or "general" (Send to Agent, Hand Off). */
+data class SavedPrompt(val name: String, val category: String, val text: String)
+
+val PROMPT_CATEGORIES = listOf("review", "general")
+
+/** The old "Prompts" setting (one "category: text" per line, no category = "general") as entries named after their text. */
+fun promptsFromLines(setting: String?): List<SavedPrompt> =
+    (setting ?: "").lines().map { it.trim() }.filter { it.isNotEmpty() }.map { line ->
         val m = Regex("^([A-Za-z]+):\\s*(.+)$").find(line)
         val (cat, text) = if (m != null) m.groupValues[1].lowercase() to m.groupValues[2] else "general" to line
-        text.takeIf { cat == category }
+        SavedPrompt(if (text.length > 40) text.take(40).substringBeforeLast(' ').trimEnd(',', ':') + "…" else text, cat, text)
     }
 
 /** The agents offered first when picking (setting "Agents"), known kinds only, in the given order. */

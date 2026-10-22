@@ -400,17 +400,17 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         promptDialog("Review with $name", "Anything $name should look at in particular? (optional)", "review", "", null)
 
     /**
-     * A prompt dialog with the saved prompts of `category` (setting "Prompts") as presets: picking one fills the text
+     * A prompt dialog with the library prompts of `category` (yours, then the trusted project's) as presets: picking one fills the text
      * after `initial`. With `required`, OK needs text beyond `initial` (the message says what). Null when cancelled.
      */
     private fun promptDialog(title: String, message: String, category: String, initial: String, required: String?): String? {
-        val presets = promptPresets(HerdrSettings.get().prompts, category)
+        val presets = promptPresets(project, category)
         val area = JBTextArea(initial, 10, 70).apply { lineWrap = true; wrapStyleWord = true }
         val content = panel {
             row { label(message) }
             if (presets.isNotEmpty()) row("Preset:") {
-                comboBox(listOf("") + presets).applyToComponent {
-                    addActionListener { area.text = initial + ((selectedItem as? String) ?: "") }
+                comboBox(listOf("") + presets.map { it.first }).applyToComponent {
+                    addActionListener { area.text = initial + (presets.getOrNull(selectedIndex - 1)?.second ?: "") }
                 }
             }
             row { scrollCell(area).align(Align.FILL) }.resizableRow()

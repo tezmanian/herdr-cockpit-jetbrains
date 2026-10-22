@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.17
+- Prompt library: the saved prompts are now a table (Name | Category | Text) with add, edit, remove and reorder; a
+  prompt can span several lines. The dialogs offer them by name. Your existing prompts are taken over once.
+- Project Prompts (Settings | Tools | Herdr Cockpit | Project Prompts): prompts of a project, in
+  `.idea/herdr-cockpit-prompts.xml` to share through the repository. Offered only in trusted projects, marked
+  "(project)".
+
 ## 0.1.16
 - Send to GitLab as Drafts…: an agent review's findings become draft notes on the merge request (via `glab` when it's
   signed in, otherwise with a personal access token kept in the password safe). A preview picks what to send; nothing

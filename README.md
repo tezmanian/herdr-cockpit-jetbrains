@@ -67,8 +67,11 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   under Settings | Tools | Herdr Cockpit | Review tools.
   **Limit:** with `glab` signed in, an agent in a Herdr pane runs as the same user and can call `glab` itself, so it
   could post or publish on its own. Only with the token (and `glab` signed out) does the token never reach the agents.
-- **Saved prompts** (setting "Prompts", one `category: text` per line): the prompt dialogs offer them as presets that
-  fill the text: `review` in the reviews, `general` in Send to Agent… and Hand Off to Agent….
+- **Prompt library** (Settings | Tools | Herdr Cockpit | Prompts): a table of prompts, each with a name, a category and
+  a text of any length. The prompt dialogs offer them by name as presets that fill the text: `review` in the reviews,
+  `general` in Send to Agent… and Hand Off to Agent…. A project can add its own under **Project Prompts**, stored in
+  `.idea/herdr-cockpit-prompts.xml` to share through the repository. They go to your agents, so they're only offered
+  in trusted projects and are marked "(project)". The earlier one-prompt-per-line setting is taken over once.
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
   or the files go to an agent you pick (the file's space first), with what it should do.
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
@@ -168,3 +171,4 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `HerdrHelp.kt` | help page (`media/help.html`) in a JCEF editor tab |
 | `HerdrLinks.kt` | links from the Herdr plugin: built-in server endpoint, `~/.herdr-cockpit/jetbrains.json` |
 | `HerdrSettings.kt` | application settings + configurable |
+| `PromptLibrary.kt` | prompt library: storage (IDE-wide, per project), the prompt table, Project Prompts settings |
