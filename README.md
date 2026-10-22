@@ -53,20 +53,22 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   With the GitLab plugin, **Review with Agent…** is also in the context menu of a merge request's changes in the GitLab
   tool window: the agent reviews those files between the merge request's commits, without checking out its branch.
   Both ask for optional extra instructions first.
-  **Send to GitLab as Drafts…** (in the findings notification and list, opt-in per review): the findings become draft
-  notes on the open merge request of that branch (or of those commits). The merge request whose head is the reviewed
-  commit wins; when several fit (two merge requests from one branch, the reviewed commit not pushed), you choose.
-  Nothing is published: you submit the review in GitLab or the IDE. A preview lists what goes where, each with a checkbox. Only findings on files the merge request
-  changes are sent; one on a line outside the diff becomes a draft on the whole merge request naming the file and
-  line. Quick actions (`/merge` at a line start) and mentions in the agent's text are defused. It uses `glab api` when
-  `glab` is installed and signed in to the remote's host, else the IDE's own GitLab account for that host
-  (Settings | Version Control | GitLab), else a personal access token (scope `api`) that it asks for once and keeps in
-  the IDE's password safe (forgotten when GitLab rejects it). The entry only appears when the remote is certainly a
-  GitLab: the review came from the GitLab tool window, the host is gitlab.com, `glab` is signed in to it, or the server
-  answers like GitLab. A host that's GitHub, Gitea or unknown gets no entry. Paths to `glab`, `gh` and `tea` can be set
-  under Settings | Tools | Herdr Cockpit | Review tools.
-  **Limit:** with `glab` signed in, an agent in a Herdr pane runs as the same user and can call `glab` itself, so it
-  could post or publish on its own. Only with the token (and `glab` signed out) does the token never reach the agents.
+  **Send to GitLab as Drafts… / Send to GitHub (Gitea) as Pending Review…** (in the findings notification and list,
+  opt-in per review): the findings go to the open merge/pull request of that branch (or of those commits), unpublished:
+  draft notes on GitLab, one pending review on GitHub and Gitea. You submit them on the forge. The request whose head
+  is the reviewed commit wins; when several fit (two from one branch, the reviewed commit not pushed), you choose. A
+  preview lists what goes where, each with a checkbox. Only findings on files the request changes are sent; one on a
+  line outside the diff becomes a note naming the file and line (GitLab: on the merge request; GitHub, Gitea: in the
+  review's text). Quick actions (`/merge` at a line start) and mentions in the agent's text are defused.
+  **Which forge and how to sign in:** Settings | Tools | Herdr Cockpit | **Review servers** is a table of servers (URL,
+  type, sign-in), with a Test button that shows who you're signed in as. Sign-in is a CLI (`glab`, `gh`, `tea`),
+  an access token (kept in the IDE's password safe, removed with the server, forgotten when the server rejects it), for
+  GitLab the IDE's own account (Settings | Version Control | GitLab), or Automatic: that order, else it asks for a
+  token. A server without an entry is detected: the review came from the GitLab tool window, a known host (gitlab.com,
+  github.com, codeberg.org), a CLI signed in to it, or the server answers like one of the three. Unknown hosts get no
+  entry. The CLI paths can be set below the table.
+  **Limit:** with a CLI signed in, an agent in a Herdr pane runs as the same user and can call it itself, so it could
+  post or publish on its own. Only with a token (and the CLI signed out) does the token never reach the agents.
 - **Prompt library** (Settings | Tools | Herdr Cockpit | Prompts): a table of prompts, each with a name, a category and
   a text of any length. The prompt dialogs offer them by name as presets that fill the text: `review` in the reviews,
   `general` in Send to Agent… and Hand Off to Agent…. A project can add its own under **Project Prompts**, stored in
@@ -154,8 +156,13 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 | `Activity.kt` | shell/agent summaries from `pane.process_info` + `pane.read` |
 | `Usage.kt` | plan usage of Claude Code, Codex and Kiro from their local files (port of `usage.ts`) |
 | `AgentReview.kt` | "Review Branch with Agent…": the prompt and the findings file (`parseReview()` checks the agent's output) |
-| `GitLabDrafts.kt` | "Send to GitLab as Drafts…": merge request lookup, draft notes, `glab api` or REST with a token |
-| `Forge.kt` | Which kind of server a remote is (GitLab, GitHub, Gitea): known hosts, signed-in CLIs, one anonymous request |
+| `Forge.kt` | GitLab, GitHub, Gitea: what differs (API root, auth), the repo from a remote, detecting which one a host is |
+| `ForgeApi.kt` | How review calls reach a forge: REST with a token, or `glab`/`gh`/`tea api` with the CLI's login |
+| `ForgeReview.kt` | The send flow's common part: finding the request, the diff's lines, defused texts |
+| `GitLabReview.kt` | GitLab: draft notes on the merge request |
+| `PendingReviews.kt` | GitHub and Gitea: one pending review on the pull request |
+| `ReviewServers.kt` | Review servers table, sign-in (CLI, token, IDE account), tokens in the password safe |
+| `EntryTable.kt` | The settings table used by the prompt library and the review servers |
 | `ClaudeSessions.kt` | Claude Code's saved sessions for a folder, for "Switch Claude Session…" |
 | `GitInfo.kt` | git CLI with the upstream's hardening (no fsmonitor, filters, hooks, lazy fetch); skipped in untrusted projects |
 | `ViewState.kt` | JSON for `media/panel.js` (same shape as the VS Code extension's `viewState.ts`) |

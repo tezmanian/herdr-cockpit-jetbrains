@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.19
+- Send an agent review to GitHub and Gitea too, as a pending review on the pull request (GitLab: draft notes as
+  before). One flow for all three: find the request (choose when several fit), preview with checkboxes, nothing
+  published until you submit it on the forge.
+- Review servers (Settings | Tools | Herdr Cockpit): a table of GitLab, GitHub and Gitea servers with their sign-in:
+  a CLI (`glab`, `gh`, `tea`), an access token kept in the password safe, the IDE's GitLab account, or automatic.
+  A Test button shows who you're signed in as. Servers without an entry are still detected automatically.
+
 ## 0.1.18
 - Fixed stale text below a pane's screen (e.g. an old prompt line under Claude's input) after a resize, when Herdr's
   pane was smaller than the tab.

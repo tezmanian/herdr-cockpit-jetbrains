@@ -41,8 +41,6 @@ class ForgeTest {
         val tea = cli("tea", null, """[{"name": "work", "url": "https://Git.Example.com", "user": "me"}]""")
         assertEquals(Forge.Gitea, cliForge("git.example.com", ForgeClis(cli("glab", "other.host"), none, tea), env))
         assertNull(cliForge("unknown.example.com", ForgeClis(cli("glab", "other.host"), cli("gh", "other.host"), tea), env))
-        assertEquals(setOf("Git.Example.com"), teaLoginHosts("""[{"URL": "https://Git.Example.com"}, {"url": "not a url"}]"""))
-        assertEquals(emptySet<String>(), teaLoginHosts("garbage"))
     }
 
     /** A server answering `routes` (path -> status, body, extra header) and 404 to the rest. */

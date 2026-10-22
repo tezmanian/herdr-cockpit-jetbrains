@@ -62,6 +62,8 @@ class HerdrSettingsState : BaseState() {
             "general: Explain what this does and point out anything risky.\n" +
             "general: Write unit tests for this.\n"
     )
+    /** Review servers (GitLab, GitHub, Gitea) and how to sign in; tokens are in the password safe. */
+    var servers by list<ServerEntry>()
     /** Paths to the forge CLIs; empty = look in the usual install folders, then PATH. */
     var glabPath by string("")
     var ghPath by string("")
@@ -90,6 +92,15 @@ class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSe
             get().library = prompts.toEntries()
         }
 
+        fun servers(): List<ReviewServer> = get().servers.mapNotNull { it.toServer() }
+
+        fun setServers(servers: List<ReviewServer>) {
+            get().servers = servers.mapTo(mutableListOf()) { it.toEntry() }
+        }
+
+        /** Your entry for the server at `host`, if any. */
+        fun serverFor(host: String) = servers().firstOrNull { it.host == host.lowercase() }
+
         fun forgeClis() = get().let { ForgeClis(resolveTool("glab", it.glabPath), resolveTool("gh", it.ghPath), resolveTool("tea", it.teaPath)) }
     }
 }
@@ -108,12 +119,24 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                         .comment("Empty: HERDR_SOCKET_PATH, HERDR_SESSION, else ~/.config/herdr/herdr.sock. A …/sessions/&lt;name&gt;/herdr.sock path selects that session.")
                 }
             }
-            group("Review tools") {
+            group("Review servers") {
+                val servers = serverTable()
+                row {
+                    cell(servers.component).align(Align.FILL)
+                        .comment("Where \"Send to … as Drafts / Pending Review\" goes and how it signs in. A server without an entry is detected (gitlab.com, github.com, a signed-in CLI, else the server itself) and signed in to automatically.")
+                }.resizableRow()
+                onReset { servers.items = HerdrSettings.servers() }
+                onIsModified { servers.items != HerdrSettings.servers() }
+                onApply {
+                    // A removed server's token goes with it.
+                    (HerdrSettings.servers().map { it.url } - servers.items.map { it.url }.toSet()).forEach { ReviewTokens.set(it, null) }
+                    HerdrSettings.setServers(servers.items)
+                }
                 row("glab:") { textField().bindText({ s.glabPath ?: "" }, { s.glabPath = it }).columns(COLUMNS_LARGE) }
                 row("gh:") { textField().bindText({ s.ghPath ?: "" }, { s.ghPath = it }).columns(COLUMNS_LARGE) }
                 row("tea:") {
                     textField().bindText({ s.teaPath ?: "" }, { s.teaPath = it }).columns(COLUMNS_LARGE)
-                        .comment("The GitLab, GitHub and Gitea CLIs. One signed in to a repository's host tells which kind of server it is, and glab sends a review there. Empty: the usual folders, then PATH.")
+                        .comment("The GitLab, GitHub and Gitea CLIs. One signed in to a server tells its kind and sends the review with its own login. Empty: the usual folders, then PATH.")
                 }
             }
             group("Starting Herdr") {
@@ -150,14 +173,14 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 }
             }
             group("Prompts") {
-                val table = PromptTable()
+                val table = promptTable()
                 row {
                     cell(table.component).align(Align.FILL)
                         .comment("Offered as presets in the prompt dialogs. review: Review Branch with Agent… and Review with Agent…; general: Send to Agent… and Hand Off to Agent…. A project can add its own under Project Prompts.")
                 }.resizableRow()
-                onReset { table.prompts = HerdrSettings.prompts() }
-                onIsModified { table.prompts != HerdrSettings.prompts() }
-                onApply { HerdrSettings.setPrompts(table.prompts) }
+                onReset { table.items = HerdrSettings.prompts() }
+                onIsModified { table.items != HerdrSettings.prompts() }
+                onApply { HerdrSettings.setPrompts(table.items) }
             }
             group("New tabs") {
                 row("Agents:") {

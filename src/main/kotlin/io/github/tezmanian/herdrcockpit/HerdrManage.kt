@@ -2,8 +2,6 @@
 // Every new pane opens straight away in an editor tab; an agent is then started in it, in the background.
 package io.github.tezmanian.herdrcockpit
 
-import com.intellij.credentialStore.CredentialAttributes
-import com.intellij.credentialStore.generateServiceName
 import com.intellij.diff.DiffContentFactory
 import com.intellij.diff.DiffDialogHints
 import com.intellij.diff.DiffManager
@@ -14,7 +12,6 @@ import com.intellij.diff.requests.DiffRequest
 import com.intellij.diff.requests.SimpleDiffRequest
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
-import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.ide.trustedProjects.TrustedProjects
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -24,7 +21,6 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
-import com.intellij.openapi.progress.runBlockingCancellable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.InputValidatorEx
@@ -43,10 +39,8 @@ import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.panel
 import java.awt.MouseInfo
 import java.io.File
-import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.Icon
-import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 
 /** What a new tab runs: a plain shell, or an agent kind ("claude", "codex", ...). */
 data class What(val kind: String? = null, val label: String? = null)
@@ -447,27 +441,40 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         val findings = parseReview(r.out.readText(), File(r.root))
             ?: return service.notify("$name's review in ${r.out} isn't a JSON array of findings.", NotificationType.WARNING)
         if (findings.isEmpty()) return service.notify("$name's review: no findings.", NotificationType.INFORMATION)
-        val remote = gitRemoteUrl(r.root)?.let(::gitlabProject)
+        val remote = gitRemoteUrl(r.root)?.let(::remoteRepo)
         // Detection may ask CLIs and the server: off the snapshot thread.
         ApplicationManager.getApplication().executeOnPooledThread {
-            val forge = remote?.let { r.forge ?: forges[it.host] ?: detectForge(it.host, HerdrSettings.forgeClis())?.also { f -> forges[it.host] = f } }
-            if (remote != null) service.log("review: ${remote.host} is ${forge?.title ?: "an unknown kind of server"}")
-            offerFindings(name, r, findings, remote?.takeIf { forge == Forge.GitLab })
+            val target = remote?.let(::target)
+            if (remote != null) service.log("review: ${remote.host} is ${target?.forge?.title ?: "an unknown kind of server"}")
+            offerFindings(name, r, findings, target?.takeIf { r.forge == null || it.forge == r.forge })
         }
     }
 
-    private fun offerFindings(name: String, r: PendingReview, findings: List<Finding>, gitlab: GitLabProject?) {
+    /** Where a review can go: the forge, the repository on it (a subpath install's prefix taken off) and your server entry. */
+    private class Target(val forge: Forge, val repo: RemoteRepo, val server: ReviewServer?) {
+        val send get() = "Send to ${forge.title} as ${forge.pending}…"
+    }
+
+    /** The forge of `remote`: your server entry, else what was found before, else detection. Background thread. */
+    private fun target(remote: RemoteRepo): Target? {
+        val server = HerdrSettings.serverFor(remote.host)
+        val forge = server?.forge ?: forges[remote.host] ?: detectForge(remote.host, HerdrSettings.forgeClis())?.also { forges[remote.host] = it }
+        val repo = server?.prefix?.takeIf { it.isNotEmpty() && remote.path.startsWith("$it/") }?.let { remote.copy(path = remote.path.removePrefix("$it/")) } ?: remote
+        return forge?.let { Target(it, repo, server) }
+    }
+
+    private fun offerFindings(name: String, r: PendingReview, findings: List<Finding>, target: Target?) {
         later {
             val n = com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
                 .createNotification("$name's review: ${findings.size} finding${if (findings.size > 1) "s" else ""}", NotificationType.INFORMATION)
-                .addAction(com.intellij.notification.NotificationAction.createSimple("Show") { showFindings(name, r, findings, gitlab) })
-            if (gitlab != null) n.addAction(com.intellij.notification.NotificationAction.createSimple("Send to GitLab as Drafts…") { sendToGitLab(r, gitlab, findings) })
+                .addAction(com.intellij.notification.NotificationAction.createSimple("Show") { showFindings(name, r, findings, target) })
+            if (target != null) n.addAction(com.intellij.notification.NotificationAction.createSimple(target.send) { sendReview(r, target, findings) })
             n.notify(project)
         }
     }
 
-    private fun showFindings(name: String, r: PendingReview, findings: List<Finding>, gitlab: GitLabProject?) {
-        val send = listOfNotNull(gitlab?.let { Item("Send to GitLab as Drafts…", AllIcons.Actions.Upload) { sendToGitLab(r, it, findings) } })
+    private fun showFindings(name: String, r: PendingReview, findings: List<Finding>, target: Target?) {
+        val send = listOfNotNull(target?.let { Item(it.send, AllIcons.Actions.Upload) { sendReview(r, it, findings) } })
         choose("Review by $name", send + findings.mapIndexed { i, f ->
             Item("${f.path}:${f.line}  ${f.body.lineSequence().first().take(120)}", null, if (i == 0 && send.isNotEmpty()) "Findings" else null) {
                 val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath("${r.root}/${f.path}")
@@ -478,120 +485,88 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
         })
     }
 
-    private fun tokenKey(host: String) = CredentialAttributes(generateServiceName("Herdr Cockpit", "GitLab token for $host"))
-
-    /**
-     * The IDE's own GitLab account for `host` (Settings | Version Control | GitLab): its REST API base and token, or null.
-     * shortcut: reflection, because the GitLab plugin's account API is internal and changed in 2026.2 (String token ->
-     * GitLabCredentials). Upgrade when it gets a public API.
-     */
-    private fun ideGitLabAccount(host: String): Pair<String, String>? = try {
-        // Our optional dependency on the GitLab plugin puts its classes in reach when it's enabled.
-        val cls = Class.forName("org.jetbrains.plugins.gitlab.authentication.accounts.GitLabAccountManager", true, javaClass.classLoader)
-        val manager = ApplicationManager.getApplication().getService(cls)
-        if (manager == null) null else {
-            val accounts = cls.getMethod("getAccountsState").invoke(manager) as kotlinx.coroutines.flow.StateFlow<*>
-            val account = (accounts.value as Set<*>).filterNotNull().firstOrNull { a ->
-                val server = a.javaClass.getMethod("getServer").invoke(a)
-                (server.javaClass.getMethod("toURI").invoke(server) as URI).host.equals(host, ignoreCase = true)
-            }
-            account?.let { a ->
-                val server = a.javaClass.getMethod("getServer").invoke(a)
-                val api = server.javaClass.getMethod("getRestApiUri").invoke(server).toString().removeSuffix("/")
-                val find = cls.methods.first { it.name == "findCredentials" && it.parameterCount == 2 }
-                val creds = runBlockingCancellable { suspendCoroutineUninterceptedOrReturn<Any?> { find.invoke(manager, a, it) } }
-                val token = creds as? String ?: creds?.javaClass?.getMethod("getAccessToken")?.invoke(creds) as? String
-                token?.let { api to it }
-            }
-        }
-    } catch (_: ClassNotFoundException) {
-        null
-    } catch (e: Exception) {
-        service.log("GitLab account of the IDE: ${e.message}")
-        null
-    }
-
-    /** Findings as draft notes on the merge request: through glab or the IDE's GitLab account, else with a token of our own. */
-    private fun sendToGitLab(r: PendingReview, gitlab: GitLabProject, findings: List<Finding>) = run("Send review to GitLab") {
-        val glab = signedInGlab(HerdrSettings.forgeClis().glab, gitlab.host)
-        if (glab != null) return@run prepareDrafts(GlabApi(glab, gitlab.host), "glab", r, gitlab, findings)
-        val ide = ideGitLabAccount(gitlab.host)
-        if (ide != null) return@run prepareDrafts(RestApi(ide.first, ide.second), "the IDE's GitLab account", r, gitlab, findings)
-        val token = PasswordSafe.instance.getPassword(tokenKey(gitlab.host))
-        if (token != null) return@run prepareDrafts(RestApi("https://${gitlab.host}/api/v4", token), "your token", r, gitlab, findings)
-        later {
-            val entered = Messages.showPasswordDialog(project,
-                "No glab signed in and no GitLab account in the IDE for ${gitlab.host}. Add one in Settings | Version Control | GitLab, " +
-                    "or enter a personal access token with scope api here (kept in the IDE's password safe):",
-                "GitLab Token for ${gitlab.host}", null)?.trim()?.ifEmpty { null } ?: return@later
-            run("Send review to GitLab") {
-                PasswordSafe.instance.setPassword(tokenKey(gitlab.host), entered)
-                prepareDrafts(RestApi("https://${gitlab.host}/api/v4", entered), "your token", r, gitlab, findings)
+    /** Findings as unpublished comments on the merge/pull request: signs in as the server entry says (Review servers). */
+    private fun sendReview(r: PendingReview, t: Target, findings: List<Finding>): Unit = run("Send review to ${t.forge.title}") {
+        when (val reach = reach(t.forge, t.repo.host, t.server)) {
+            is Reach.Ready -> prepareReview(forgeReview(t.forge, reach.api, t.repo), reach, r, t, findings)
+            is Reach.Fail -> service.notify(reach.message, NotificationType.WARNING)
+            is Reach.NeedToken -> later {
+                val entered = Messages.showPasswordDialog(project,
+                    "No ${t.forge.cli} signed in to ${t.repo.host}${if (t.forge == Forge.GitLab) " and no GitLab account in the IDE" else ""}. " +
+                        "Set the server up under Settings | Tools | Herdr Cockpit | Review servers, or enter an access token here " +
+                        "(kept in the IDE's password safe):",
+                    "${t.forge.title} Token for ${t.repo.host}", null)?.trim()?.ifEmpty { null } ?: return@later
+                ReviewTokens.set(reach.web, entered)
+                sendReview(r, t, findings)
             }
         }
     }
 
-    /** Finds the merge request (asks when several fit), then shows which findings would go there. Background thread. */
-    private fun prepareDrafts(api: GitLabApi, via: String, r: PendingReview, gitlab: GitLabProject, findings: List<Finding>) {
-        val candidates = forgetRejected(via, gitlab) { mergeRequestCandidates(api, gitlab, r.branch, r.head) }
+    /** Finds the merge/pull request (asks when several fit), then shows which findings would go there. Background thread. */
+    private fun prepareReview(review: ForgeReview, reach: Reach.Ready, r: PendingReview, t: Target, findings: List<Finding>) {
+        val candidates = forgetRejected(reach, t) { review.candidates(r.branch, r.head) }
         when (candidates.size) {
-            0 -> service.notify("No open merge request on ${gitlab.host} for ${r.branch ?: "these changes"}.", NotificationType.INFORMATION)
-            1 -> previewFor(api, via, r, gitlab, findings, candidates[0].iid)
+            0 -> service.notify("No open ${t.forge.request} on ${t.repo.host} for ${r.branch ?: "these changes"}.", NotificationType.INFORMATION)
+            1 -> previewFor(review, reach, r, t, findings, candidates[0].number)
             else -> later {
-                choose("Which Merge Request?", candidates.map { c ->
-                    Item("!${c.iid} ${c.title}  (${c.source} → ${c.target})", null) {
-                        run("Send review to GitLab") { previewFor(api, via, r, gitlab, findings, c.iid) }
+                choose("Which ${t.forge.request.replaceFirstChar { it.uppercase() }}?", candidates.map { c ->
+                    Item("${t.forge.sign}${c.number} ${c.title}  (${c.source} → ${c.target})", null) {
+                        run("Send review to ${t.forge.title}") { previewFor(review, reach, r, t, findings, c.number) }
                     }
                 })
             }
         }
     }
 
-    /** A token GitLab rejects is forgotten, so the next try asks again. */
-    private fun <T> forgetRejected(via: String, gitlab: GitLabProject, call: () -> T): T = try {
+    /** A token the forge rejects is forgotten, so the next try asks again. */
+    private fun <T> forgetRejected(reach: Reach.Ready, t: Target, call: () -> T): T = try {
         call()
-    } catch (e: GitLabError) {
-        if (via == "your token" && e.status == 401) PasswordSafe.instance.setPassword(tokenKey(gitlab.host), null)
+    } catch (e: ForgeError) {
+        if (reach.ownToken && e.status == 401) ReviewTokens.set(t.server?.url?.trimEnd('/') ?: "https://${t.repo.host}", null)
         throw e
     }
 
-    /** Loads merge request `iid` and shows which findings would go there. Background thread. */
-    private fun previewFor(api: GitLabApi, via: String, r: PendingReview, gitlab: GitLabProject, findings: List<Finding>, iid: Int) {
-        val mr = forgetRejected(via, gitlab) { loadMergeRequest(api, gitlab, iid) }
-        val drafts = draftsFor(findings, mr)
-        if (drafts.isEmpty()) return service.notify("None of the findings is on a file merge request !${mr.iid} changes.", NotificationType.INFORMATION)
-        later { previewDrafts(api, via, r, gitlab, mr, drafts, findings.size - drafts.size) }
+    /** Loads the merge/pull request and shows which findings would go there. Background thread. */
+    private fun previewFor(review: ForgeReview, reach: Reach.Ready, r: PendingReview, t: Target, findings: List<Finding>, number: Int) {
+        val cr = forgetRejected(reach, t) { review.load(number) }
+        val onChanged = findings.filter { it.path in cr.files }
+        if (onChanged.isEmpty()) return service.notify("None of the findings is on a file ${t.forge.sign}$number changes.", NotificationType.INFORMATION)
+        later { previewReview(review, reach, r, t, cr, onChanged, findings.size - onChanged.size) }
     }
 
-    /** What would be sent, each finding with a checkbox; OK posts the checked ones as drafts. */
-    private fun previewDrafts(api: GitLabApi, via: String, r: PendingReview, gitlab: GitLabProject, mr: MergeRequest,
-                              drafts: List<Pair<Finding, String>>, left: Int) {
+    /** What would be sent, each finding with a checkbox; OK posts the checked ones, unpublished. */
+    private fun previewReview(review: ForgeReview, reach: Reach.Ready, r: PendingReview, t: Target, cr: ChangeRequest,
+                              findings: List<Finding>, left: Int) {
+        val f = t.forge
+        val ref = "${f.sign}${cr.number}"
         val list = CheckBoxList<Finding>().apply {
-            drafts.forEach { (f, _) -> addItem(f, "${f.path}:${f.line}  ${f.body.lineSequence().first().take(120)}", true) }
+            findings.forEach { addItem(it, "${it.path}:${it.line}  ${it.body.lineSequence().first().take(120)}", true) }
         }
         val notes = listOfNotNull(
-            "Draft notes on !${mr.iid} ${mr.title} (via $via). Nothing is published: you submit the review in GitLab or the IDE.",
-            "Findings on lines outside the diff become drafts on the merge request that name the file and line.",
-            if (left > 0) "$left finding${if (left > 1) "s" else ""} on files the merge request doesn't change are left out." else null,
-            if (r.head != null && r.head != mr.headSha) "The review saw ${r.head.take(8)}, the merge request is at ${mr.headSha.take(8)}: lines may be off." else null,
+            (if (f == Forge.GitLab) "Draft notes on" else "A pending review on") + " $ref ${cr.title} (via ${reach.via}). " +
+                "Nothing is published: you submit the review on ${f.title}.",
+            if (f == Forge.GitLab) "Findings on lines outside the diff become drafts on the merge request that name the file and line."
+            else "Findings on lines outside the diff go into the review's text, naming the file and line.",
+            if (left > 0) "$left finding${if (left > 1) "s" else ""} on files the ${f.request} doesn't change are left out." else null,
+            if (r.head != null && r.head != cr.headSha) "The review saw ${r.head.take(8)}, the ${f.request} is at ${cr.headSha.take(8)}: lines may be off." else null,
         )
         val content = panel {
             notes.forEach { row { text(it, maxLineLength = 100) } }
             row { scrollCell(list).align(Align.FILL) }.resizableRow()
         }
         val dialog = object : DialogWrapper(project) {
-            init { title = "Send to GitLab as Drafts"; setOKButtonText("Send Drafts"); init() }
+            init { title = t.send.removeSuffix("…"); setOKButtonText("Send"); init() }
             override fun createCenterPanel() = content
         }
         if (!dialog.showAndGet()) return
-        val chosen = drafts.filter { list.isItemSelected(it.first) }
+        val chosen = findings.filter { list.isItemSelected(it) }
         if (chosen.isEmpty()) return
-        run("Sending drafts to !${mr.iid}") {
-            val n = forgetRejected(via, gitlab) { sendDrafts(api, gitlab, mr, chosen) }
+        run("Sending review to $ref") {
+            val n = forgetRejected(reach, t) { review.send(cr, chosen) }
             later {
                 com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
-                    .createNotification("$n draft${if (n > 1) "s" else ""} on !${mr.iid}; submit the review to publish them.", NotificationType.INFORMATION)
-                    .addAction(com.intellij.notification.NotificationAction.createSimple("Open Merge Request") { BrowserUtil.browse(mr.url) })
+                    .createNotification("$n finding${if (n > 1) "s" else ""} on $ref, unpublished; submit the review on ${f.title} to publish.", NotificationType.INFORMATION)
+                    .addAction(com.intellij.notification.NotificationAction.createSimple("Open ${f.request.replaceFirstChar { it.uppercase() }}") { BrowserUtil.browse(cr.url) })
                     .notify(project)
             }
         }

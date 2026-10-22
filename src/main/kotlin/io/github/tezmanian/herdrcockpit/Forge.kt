@@ -1,17 +1,71 @@
-// Which kind of server hosts a repository: GitLab, GitHub or Gitea. Known public hosts, then a CLI signed in to the
-// host (glab, gh, tea can only sign in to their own kind), then one anonymous request to the server. Unknown stays
-// null: better no "Send to …" than one that goes nowhere. No IntelliJ imports.
+// Which kind of server hosts a repository (GitLab, GitHub, Gitea) and what differs between them. Detection: known
+// public hosts, then a CLI signed in to the host (glab, gh, tea can only sign in to their own kind), then one
+// anonymous request to the server. Unknown stays null: better no "Send to …" than one that goes nowhere. No IntelliJ
+// imports.
 package io.github.tezmanian.herdrcockpit
 
-import com.google.gson.JsonElement
 import com.google.gson.JsonParser
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 
-enum class Forge(val title: String) { GitLab("GitLab"), GitHub("GitHub"), Gitea("Gitea") }
+enum class Forge(
+    val title: String,
+    /** How a merge/pull request is referenced: "!7" or "#7". */
+    val sign: String,
+    val request: String,
+    /** What the unpublished comments are called in the forge's UI. */
+    val pending: String,
+    val cli: String,
+) {
+    GitLab("GitLab", "!", "merge request", "Drafts", "glab"),
+    GitHub("GitHub", "#", "pull request", "Pending Review", "gh"),
+    Gitea("Gitea", "#", "pull request", "Pending Review", "tea");
+
+    /** The REST API root for the server at `web` ("https://host" or a subpath install). */
+    fun apiBase(web: String): String {
+        val w = web.trimEnd('/')
+        return when (this) {
+            GitLab -> "$w/api/v4"
+            GitHub -> if (URI(w).host.equals("github.com", true)) "https://api.github.com" else "$w/api/v3"
+            Gitea -> "$w/api/v1"
+        }
+    }
+
+    /** The Authorization header's value for an access token. */
+    fun auth(token: String) = if (this == Gitea) "token $token" else "Bearer $token"
+
+    fun headers(): Map<String, String> = if (this == GitHub) mapOf("Accept" to "application/vnd.github+json") else emptyMap()
+
+    companion object {
+        fun of(title: String?) = entries.firstOrNull { it.title.equals(title, ignoreCase = true) }
+    }
+}
+
+/** A repository from a git remote URL (https, ssh:// or scp-like): its host and full path ("group/sub/project"). */
+data class RemoteRepo(val host: String, val path: String) {
+    /** GitLab addresses projects by their URL-encoded full path. */
+    val gitlab get() = "projects/" + enc(path)
+    /** GitHub and Gitea: "repos/owner/name". */
+    val repos get() = "repos/$path"
+}
+
+private val SEGMENT = Regex("^[A-Za-z0-9._-]+$")
+
+fun remoteRepo(remote: String): RemoteRepo? {
+    val r = remote.trim().removeSuffix("/").removeSuffix(".git")
+    val m = Regex("""^(?:https?|ssh)://(?:[^@/]+@)?([^/:]+)(?::\d+)?/(.+)$""").find(r)
+        ?: Regex("""^(?:[^@/:]+@)?([^/:]+):([^/].*)$""").find(r) ?: return null
+    val (host, path) = m.destructured
+    val parts = path.split('/')
+    if (!Regex("^[A-Za-z0-9.-]+$").matches(host) || parts.size < 2 || !parts.all { SEGMENT.matches(it) && it != ".." }) return null
+    return RemoteRepo(host.lowercase(), path)
+}
+
+fun enc(s: String): String = URLEncoder.encode(s, Charsets.UTF_8)
 
 /** The CLIs to ask, as paths or bare names (looked up on PATH). */
 data class ForgeClis(val glab: String, val gh: String, val tea: String)
@@ -24,30 +78,11 @@ private val KNOWN = mapOf(
 fun knownForge(host: String): Forge? = KNOWN[host.lowercase()]
 
 /** The forge whose CLI is signed in to `host`, else null. */
-fun cliForge(host: String, clis: ForgeClis, env: Map<String, String> = System.getenv()): Forge? {
-    fun ok(vararg cmd: String) = binaryFound(cmd[0]) && runCommand(cmd.toList(), env, 10)?.first == 0
-    if (ok(clis.glab, "auth", "status", "--hostname", host)) return Forge.GitLab
-    if (ok(clis.gh, "auth", "status", "--hostname", host)) return Forge.GitHub
-    if (binaryFound(clis.tea)) {
-        val out = runCommand(listOf(clis.tea, "logins", "list", "--output", "json"), env, 10)?.takeIf { it.first == 0 }?.second
-        if (out != null && teaLoginHosts(out).any { it.equals(host, ignoreCase = true) }) return Forge.Gitea
-    }
-    return null
-}
-
-/** The hosts of the URLs in `tea logins list --output json` (whatever the field is called). */
-fun teaLoginHosts(json: String): Set<String> {
-    val hosts = mutableSetOf<String>()
-    fun walk(e: JsonElement) {
-        when {
-            e.isJsonArray -> e.asJsonArray.forEach(::walk)
-            e.isJsonObject -> e.asJsonObject.entrySet().forEach { walk(it.value) }
-            e.isJsonPrimitive && e.asJsonPrimitive.isString ->
-                runCatching { URI(e.asString) }.getOrNull()?.takeIf { it.scheme == "http" || it.scheme == "https" }?.host?.let(hosts::add)
-        }
-    }
-    runCatching { walk(JsonParser.parseString(json)) }
-    return hosts
+fun cliForge(host: String, clis: ForgeClis, env: Map<String, String> = System.getenv()): Forge? = when {
+    cliSignedIn(clis.glab, host, env) -> Forge.GitLab
+    cliSignedIn(clis.gh, host, env) -> Forge.GitHub
+    host.lowercase() in teaLogins(clis.tea, env) -> Forge.Gitea
+    else -> null
 }
 
 /**
