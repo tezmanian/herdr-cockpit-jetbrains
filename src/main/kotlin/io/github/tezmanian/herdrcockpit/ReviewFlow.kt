@@ -78,7 +78,10 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
                 } ?: return@later
                 val out = reviewFile(File(System.getProperty("user.home")), space.label, branch)
                 val extra = reviewInstructions(name) ?: return@later
-                startReview(name, pane.id, PendingReview(root, out, System.currentTimeMillis(), branch, head), reviewPrompt(root, branch, target, out, extra))
+                val template = HerdrSettings.branchReviewTemplate()
+                startReview(name, pane.id, PendingReview(root, out, System.currentTimeMillis(), branch, head)) {
+                    reviewPrompt(root, branch, target, out, extra, gitChangedFiles(root, target).orEmpty(), template)
+                }
             }
         }
     }
@@ -101,7 +104,10 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
                     Item("$name (${a.status ?: AgentStatus.unknown})", null) {
                         val out = reviewFile(File(System.getProperty("user.home")), s.label, "mr-" + head.take(12))
                         val extra = reviewInstructions(name) ?: return@Item
-                        startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head, Forge.GitLab), reviewChangesPrompt(root, base, head, paths, out, extra))
+                        val template = HerdrSettings.changesReviewTemplate()
+                        startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head, Forge.GitLab)) {
+                            reviewChangesPrompt(root, base, head, paths, out, extra, template)
+                        }
                     }
                 })
             }
@@ -112,12 +118,14 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
     private fun reviewInstructions(name: String): String? =
         promptDialog("Review with $name", "Anything $name should look at in particular? (optional)", "review", "", null)
 
-    private fun startReview(name: String, paneId: String, review: PendingReview, text: String) = run("Review with $name") {
+    /** Sends the prompt `text` builds (in the background: it may run git). */
+    private fun startReview(name: String, paneId: String, review: PendingReview, text: () -> String) = run("Review with $name") {
+        val prompt = text()
         review.out.parentFile.mkdirs()
         review.out.delete()
         reviews[paneId] = review
         try {
-            actions.promptAgent(paneId, text)
+            actions.promptAgent(paneId, prompt)
         } catch (e: HerdrError) {
             reviews.remove(paneId)
             if (e.code != "agent_blocked") throw e

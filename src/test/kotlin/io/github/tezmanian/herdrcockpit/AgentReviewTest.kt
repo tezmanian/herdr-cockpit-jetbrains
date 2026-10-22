@@ -55,10 +55,34 @@ class AgentReviewTest {
     }
 
     @Test
-    fun extraInstructionsComeBeforeTheRules() {
+    fun defaultPromptsCarryTheDiffTheFilesAndTheRules() {
         val out = File(root, "r.json")
-        val p = reviewPrompt("/repo", "feat", "origin/main", out, " focus on SQL ")
-        assert(p.contains("Also: focus on SQL\n\nOnly read:")) { p }
-        assert(!reviewPrompt("/repo", "feat", "origin/main", out).contains("Also:"))
+        val p = reviewPrompt("/repo", "feat", "origin/main", out, " focus on SQL ", listOf("a.kt", "it's.kt"))
+        assert(p.contains("`git diff origin/main...HEAD`")) { p }
+        assert(p.contains("Changed files: 'a.kt' 'it'\\''s.kt'")) { p }
+        assert(p.contains("Additional instructions: focus on SQL\n\nOnly read:")) { p }
+        assert(p.contains("findings to ${out.path} as a JSON array")) { p }
+        // No instructions, no files: those lines go, no blank-line pile-up.
+        val bare = reviewPrompt("/repo", "feat", "origin/main", out)
+        assert(!bare.contains("Additional instructions") && !bare.contains("Changed files") && !bare.contains("\n\n\n")) { bare }
+        val mr = reviewChangesPrompt("/repo", "aaa", "bbb", listOf("x/y.php"), out)
+        assert(mr.contains("`git diff aaa bbb -- 'x/y.php'`") && mr.contains("as of bbb")) { mr }
+    }
+
+    @Test
+    fun templatesFillInOnePass() {
+        val vars = mapOf("diff" to "git diff a b", "instructions" to "look at {diff}", "out" to "/o.json", "format" to "[]")
+        assertEquals("Run git diff a b. Note: look at {diff}. Write to /o.json. {unknown}",
+            fillTemplate("Run {diff}. Note: {instructions}. Write to {out}. {unknown}", vars))
+        // Without {out} the agent wouldn't know where to write: the rules are added.
+        assert(fillTemplate("Just {diff}", vars).endsWith("or [] if you found nothing. In each body, say what goes wrong and in which situation."))
+    }
+
+    @Test
+    fun untouchedLegacyPresetsAreUpgraded() {
+        val legacy = promptsFromLines(LEGACY_PROMPTS)
+        val mine = SavedPrompt("Mine", "review", "my own")
+        val edited = legacy[1].copy(text = "Only real bugs, please")
+        assertEquals(listOf(DEFAULT_PROMPTS[0], edited, mine, DEFAULT_PROMPTS[4]), upgradePresets(listOf(legacy[0], edited, mine, legacy[4])))
     }
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.23
+- Review prompts: what Review Branch with Agent… and Review with Agent… send is now a template each, under Settings |
+  Tools | Herdr Cockpit | Review prompts, with the variables {repo}, {branch}, {target}, {base}, {head}, {diff},
+  {files}, {instructions}, {out} and {format}. Lines whose variables are all empty are left out; a template without
+  {out} gets the findings-file rules appended. Branch reviews now also list the changed files.
+- More detailed built-in presets: Security, Real bugs only, Missing tests, Explain and flag risks, Write unit tests.
+  They replace the short presets of earlier versions in your library, unless you edited them.
+
 ## 0.1.22
 - Internal: the review flow (Review, Review Branch with Agent…, Review with Agent…, sending findings to a forge) moved
   out of HerdrManage into ReviewFlow, which needs only a narrow ReviewHost from the service. The shared popups, dialogs

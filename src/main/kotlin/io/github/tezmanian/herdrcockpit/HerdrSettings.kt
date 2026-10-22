@@ -57,13 +57,12 @@ class HerdrSettingsState : BaseState() {
     /** Whether `prompts` was copied into `library` (once). */
     var promptsMigrated by property(false)
     /** Before the library: one "category: text" per line. Only read to fill the library once. */
-    var prompts by string(
-        "review: Focus on security: injection, authorization, secrets, unsafe input.\n" +
-            "review: Only real bugs; skip style and naming.\n" +
-            "review: Focus on tests: missing cases and edge cases.\n" +
-            "general: Explain what this does and point out anything risky.\n" +
-            "general: Write unit tests for this.\n"
-    )
+    var prompts by string(LEGACY_PROMPTS)
+    /** Whether the library's untouched first presets were replaced by DEFAULT_PROMPTS (once). */
+    var presetsUpgraded by property(false)
+    /** The prompt templates of the agent reviews; empty = the default (AgentReview.kt). */
+    var branchReviewTemplate by string("")
+    var changesReviewTemplate by string("")
     /** Review servers (GitLab, GitHub, Gitea) and how to sign in; tokens are in the password safe. */
     var servers by list<ServerEntry>()
     /** Before 0.1.21: global paths to the forge CLIs, now per server. Only read to move them there once. */
@@ -87,12 +86,19 @@ class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSe
                 s.library = promptsFromLines(s.prompts).toEntries()
                 s.promptsMigrated = true
             }
+            if (!s.presetsUpgraded) {
+                s.library = upgradePresets(s.library.toPrompts()).toEntries()
+                s.presetsUpgraded = true
+            }
             return s.library.toPrompts()
         }
 
         fun setPrompts(prompts: List<SavedPrompt>) {
             get().library = prompts.toEntries()
         }
+
+        fun branchReviewTemplate() = get().branchReviewTemplate?.ifBlank { null } ?: DEFAULT_BRANCH_TEMPLATE
+        fun changesReviewTemplate() = get().changesReviewTemplate?.ifBlank { null } ?: DEFAULT_CHANGES_TEMPLATE
 
         /** Your servers; the first call moves the old global CLI paths into them. */
         fun servers(): List<ReviewServer> {
@@ -189,6 +195,19 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 onReset { table.items = HerdrSettings.prompts() }
                 onIsModified { table.items != HerdrSettings.prompts() }
                 onApply { HerdrSettings.setPrompts(table.items) }
+            }
+            group("Review prompts") {
+                row {
+                    text("What \"Review Branch with Agent…\" and \"Review with Agent…\" send. Variables: " +
+                        REVIEW_VARIABLES.joinToString(", ") { "<code>{${it.first}}</code> ${it.second}" } +
+                        ". A line whose variables are all empty is left out. Without <code>{out}</code> the rules for the findings file are added at the end. Clear a template to get the default back.")
+                }
+                row("Branch:") {}
+                row { textArea().bindText({ HerdrSettings.branchReviewTemplate() }, { s.branchReviewTemplate = if (it.trim() == DEFAULT_BRANCH_TEMPLATE) "" else it.trim() })
+                    .rows(8).align(Align.FILL).applyToComponent { lineWrap = true; wrapStyleWord = true } }
+                row("Merge request changes:") {}
+                row { textArea().bindText({ HerdrSettings.changesReviewTemplate() }, { s.changesReviewTemplate = if (it.trim() == DEFAULT_CHANGES_TEMPLATE) "" else it.trim() })
+                    .rows(8).align(Align.FILL).applyToComponent { lineWrap = true; wrapStyleWord = true } }
             }
             group("New tabs") {
                 row("Agents:") {

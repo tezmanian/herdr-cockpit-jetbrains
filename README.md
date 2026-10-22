@@ -227,7 +227,15 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
   a text of any length. The prompt dialogs offer them by name as presets that fill the text: `review` in the reviews,
   `general` in Send to Agent… and Hand Off to Agent…. A project can add its own under **Project Prompts**, stored in
   `.idea/herdr-cockpit-prompts.xml` to share through the repository. They go to your agents, so they're only offered
-  in trusted projects and are marked "(project)". The earlier one-prompt-per-line setting is taken over once.
+  in trusted projects and are marked "(project)". The earlier one-prompt-per-line setting is taken over once. The
+  built-in presets (Security, Real bugs only, Missing tests, Explain and flag risks, Write unit tests) replace the
+  short ones of earlier versions, unless you edited those.
+- **Review prompts** (Settings | Tools | Herdr Cockpit | Review prompts): the whole text that Review Branch with Agent…
+  and Review with Agent… send, as two templates with variables: `{repo}`, `{branch}`, `{target}`, `{base}`, `{head}`,
+  `{diff}` (the git diff command for exactly these changes), `{files}` (the changed files, quoted for the shell),
+  `{instructions}` (what you typed in the review dialog), `{out}` (the findings file) and `{format}` (its JSON format).
+  A line whose variables are all empty is left out. A template without `{out}` gets the rules for the findings file
+  appended, because without them the review never comes back. Clearing a template restores the default.
 
   ![The prompt library and the agents offered for new tabs](docs/images/prompts.png)
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
@@ -317,7 +325,7 @@ For screenshots, a pane can pose as an agent without starting one:
 | `Connection.kt` | finding `herdr`, `diagnose()`, `startServer()` (detached, clean env), backoff |
 | `Activity.kt` | shell/agent summaries from `pane.process_info` + `pane.read` |
 | `Usage.kt` | plan usage of Claude Code, Codex and Kiro from their local files (port of `usage.ts`) |
-| `AgentReview.kt` | "Review Branch with Agent…": the prompt and the findings file (`parseReview()` checks the agent's output) |
+| `AgentReview.kt` | agent reviews: the prompt templates and their variables, the findings file (`parseReview()` checks the agent's output) |
 | `Forge.kt` | GitLab, GitHub, Gitea: what differs (API root, auth), the repo from a remote, detecting which one a host is |
 | `ForgeApi.kt` | How review calls reach a forge: REST with a token, or `glab`/`gh`/`tea api` with the CLI's login |
 | `ForgeReview.kt` | The send flow's common part: finding the request, the diff's lines, defused texts |

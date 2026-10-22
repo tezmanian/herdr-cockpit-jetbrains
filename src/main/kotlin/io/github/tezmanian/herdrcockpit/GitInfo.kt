@@ -173,6 +173,9 @@ fun gitChanges(root: String): List<GitChange>? = run(root, listOf("status", "--p
 fun gitShowHead(root: String, path: String): String? = run(root, listOf("show", "HEAD:$path"))
 fun gitBranch(root: String): String? = run(root, listOf("symbolic-ref", "--short", "-q", "HEAD"))?.trim()?.ifEmpty { null }
 fun gitHead(root: String): String? = run(root, listOf("rev-parse", "HEAD"))?.trim()?.ifEmpty { null }
+/** The files `target...HEAD` changes, relative to `root`. */
+fun gitChangedFiles(root: String, target: String): List<String>? =
+    run(root, listOf("diff", "--name-only", "-z", "$target...HEAD", "--"))?.split('\u0000')?.filter { it.isNotEmpty() }
 fun gitRemoteUrl(root: String): String? = run(root, listOf("remote", "get-url", "origin"))?.trim()?.ifEmpty { null }
 /** The remote's default branch ("origin/main"), if the clone recorded it. */
 fun gitDefaultBranch(root: String): String? = run(root, listOf("symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"))?.trim()?.ifEmpty { null }

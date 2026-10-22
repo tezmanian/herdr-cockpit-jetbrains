@@ -38,6 +38,43 @@ fun promptsFromLines(setting: String?): List<SavedPrompt> =
         SavedPrompt(if (text.length > 40) text.take(40).substringBeforeLast(' ').trimEnd(',', ':') + "…" else text, cat, text)
     }
 
+/** The presets before 0.1.23, as the old setting held them. */
+const val LEGACY_PROMPTS =
+    "review: Focus on security: injection, authorization, secrets, unsafe input.\n" +
+        "review: Only real bugs; skip style and naming.\n" +
+        "review: Focus on tests: missing cases and edge cases.\n" +
+        "general: Explain what this does and point out anything risky.\n" +
+        "general: Write unit tests for this.\n"
+
+/** The presets since 0.1.23, in the order of LEGACY_PROMPTS. */
+val DEFAULT_PROMPTS = listOf(
+    SavedPrompt("Security", "review",
+        "Focus on security. Look for injection (SQL, shell commands, file paths, templates), missing or wrong authorization " +
+            "checks, secrets in code, config or logs, unsafe deserialization, and user input that reaches queries, files or " +
+            "commands without validation. For each finding, name the input that gets through and what an attacker gains."),
+    SavedPrompt("Real bugs only", "review",
+        "Report only real bugs: code that crashes, returns wrong results, loses or corrupts data, leaks resources, or breaks " +
+            "under concurrency or unexpected input. For each one, describe a concrete input or state that triggers it and " +
+            "what goes wrong. Skip style, naming, formatting and refactoring ideas; if you aren't sure it's a bug, leave it out."),
+    SavedPrompt("Missing tests", "review",
+        "Focus on tests. Which changed behaviour has no test? Which edge cases (empty, null, limits, errors, concurrency) and " +
+            "error paths are missing? Do the existing tests actually assert the new behaviour, or would they still pass if " +
+            "it broke? Point at the changed line that needs a test and say what the test should check."),
+    SavedPrompt("Explain and flag risks", "general",
+        "Explain what this code does: its purpose, the main flow and how it fits into the code around it. Then list anything " +
+            "risky (possible bugs, security issues, performance traps, hidden assumptions), each with where it is and why it matters."),
+    SavedPrompt("Write unit tests", "general",
+        "Write unit tests for this with the project's existing test framework and conventions. Cover the normal cases, edge " +
+            "cases and error paths. Run them; fix a test that is wrong, but if one fails because of a bug in the code, don't " +
+            "change the code: report the bug."),
+)
+
+/** `prompts` with each untouched legacy preset replaced by its successor; your own and edited ones stay. */
+fun upgradePresets(prompts: List<SavedPrompt>): List<SavedPrompt> {
+    val legacy = promptsFromLines(LEGACY_PROMPTS)
+    return prompts.map { p -> legacy.indexOf(p).takeIf { it >= 0 }?.let { DEFAULT_PROMPTS[it] } ?: p }
+}
+
 /** The agents offered first when picking (setting "Agents"), known kinds only, in the given order. */
 fun favoriteAgents(setting: String?): List<String> =
     (setting ?: "").split(',', ' ').map { it.trim().lowercase() }.filter { it in AGENT_KINDS }.distinct()
