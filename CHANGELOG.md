@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.21
+- Review servers: the CLI path (glab, gh or tea, by the server's type) is now set in the server's entry, shown for the
+  sign-ins Automatic and CLI, instead of three global fields. Paths you had set move to your servers of that type
+  once; a notification says so, and names any path no server took. Servers without an entry find the CLIs in the
+  usual install folders or on PATH.
+
 ## 0.1.20
 - Fixed OK staying disabled in the review server and prompt dialogs after the first check, e.g. when the URL started
   as "https://".

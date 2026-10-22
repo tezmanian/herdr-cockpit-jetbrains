@@ -2,6 +2,8 @@
 // pick the program we launch or the socket we talk to.
 package io.github.tezmanian.herdrcockpit
 
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.components.BaseState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.SimplePersistentStateComponent
@@ -64,7 +66,7 @@ class HerdrSettingsState : BaseState() {
     )
     /** Review servers (GitLab, GitHub, Gitea) and how to sign in; tokens are in the password safe. */
     var servers by list<ServerEntry>()
-    /** Paths to the forge CLIs; empty = look in the usual install folders, then PATH. */
+    /** Before 0.1.21: global paths to the forge CLIs, now per server. Only read to move them there once. */
     var glabPath by string("")
     var ghPath by string("")
     var teaPath by string("")
@@ -92,7 +94,21 @@ class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSe
             get().library = prompts.toEntries()
         }
 
-        fun servers(): List<ReviewServer> = get().servers.mapNotNull { it.toServer() }
+        /** Your servers; the first call moves the old global CLI paths into them. */
+        fun servers(): List<ReviewServer> {
+            val s = get()
+            val old = mapOf(Forge.GitLab to s.glabPath, Forge.GitHub to s.ghPath, Forge.Gitea to s.teaPath).mapValues { it.value ?: "" }
+            if (old.values.any { it.isNotBlank() }) {
+                val (servers, left) = takeOverCliPaths(s.servers.mapNotNull { it.toServer() }, old)
+                setServers(servers)
+                s.glabPath = ""; s.ghPath = ""; s.teaPath = ""
+                NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit").createNotification(
+                    "The CLI paths are now set per server (Settings | Tools | Herdr Cockpit | Review servers)." +
+                        if (left.isEmpty()) " Yours were moved there." else " Add a server to use " + left.entries.joinToString { "${it.key.cli} at ${it.value}" } + ".",
+                    NotificationType.INFORMATION).notify(null)
+            }
+            return s.servers.mapNotNull { it.toServer() }
+        }
 
         fun setServers(servers: List<ReviewServer>) {
             get().servers = servers.mapTo(mutableListOf()) { it.toEntry() }
@@ -100,8 +116,6 @@ class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSe
 
         /** Your entry for the server at `host`, if any. */
         fun serverFor(host: String) = servers().firstOrNull { it.host == host.lowercase() }
-
-        fun forgeClis() = get().let { ForgeClis(resolveTool("glab", it.glabPath), resolveTool("gh", it.ghPath), resolveTool("tea", it.teaPath)) }
     }
 }
 
@@ -123,7 +137,7 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 val servers = serverTable()
                 row {
                     cell(servers.component).align(Align.FILL)
-                        .comment("Where \"Send to … as Drafts / Pending Review\" goes and how it signs in. A server without an entry is detected (gitlab.com, github.com, a signed-in CLI, else the server itself) and signed in to automatically.")
+                        .comment("Where \"Send to … as Drafts / Pending Review\" goes and how it signs in. A server without an entry is detected (gitlab.com, github.com, a CLI signed in there (found in the usual folders or on PATH), else the server itself) and signed in to automatically.")
                 }.resizableRow()
                 onReset { servers.items = HerdrSettings.servers() }
                 onIsModified { servers.items != HerdrSettings.servers() }
@@ -131,12 +145,6 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                     // A removed server's token goes with it.
                     (HerdrSettings.servers().map { it.url } - servers.items.map { it.url }.toSet()).forEach { ReviewTokens.set(it, null) }
                     HerdrSettings.setServers(servers.items)
-                }
-                row("glab:") { textField().bindText({ s.glabPath ?: "" }, { s.glabPath = it }).columns(COLUMNS_LARGE) }
-                row("gh:") { textField().bindText({ s.ghPath ?: "" }, { s.ghPath = it }).columns(COLUMNS_LARGE) }
-                row("tea:") {
-                    textField().bindText({ s.teaPath ?: "" }, { s.teaPath = it }).columns(COLUMNS_LARGE)
-                        .comment("The GitLab, GitHub and Gitea CLIs. One signed in to a server tells its kind and sends the review with its own login. Empty: the usual folders, then PATH.")
                 }
             }
             group("Starting Herdr") {

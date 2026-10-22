@@ -460,7 +460,7 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
     /** The forge of `remote`: your server entry, else what was found before, else detection. Background thread. */
     private fun target(remote: RemoteRepo): Target? {
         val server = HerdrSettings.serverFor(remote.host)
-        val forge = server?.forge ?: forges[remote.host] ?: detectForge(remote.host, HerdrSettings.forgeClis())?.also { forges[remote.host] = it }
+        val forge = server?.forge ?: forges[remote.host] ?: detectForge(remote.host, foundClis())?.also { forges[remote.host] = it }
         val repo = server?.prefix?.takeIf { it.isNotEmpty() && remote.path.startsWith("$it/") }?.let { remote.copy(path = remote.path.removePrefix("$it/")) } ?: remote
         return forge?.let { Target(it, repo, server) }
     }

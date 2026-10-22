@@ -56,21 +56,40 @@ private fun tokenHint(forge: Forge) = when (forge) {
     Forge.Gitea -> "Access token with repository read and write."
 } + " Empty keeps the stored one. Kept in the IDE's password safe."
 
-/** A server you set up: its web address ("https://host" or a subpath install), its kind and how to sign in. */
-data class ReviewServer(val url: String, val forge: Forge, val login: ServerLogin) {
+/**
+ * A server you set up: its web address ("https://host" or a subpath install), its kind, how to sign in and where its
+ * CLI is (empty: the usual install folders, then PATH).
+ */
+data class ReviewServer(val url: String, val forge: Forge, val login: ServerLogin, val cli: String = "") {
     val host: String get() = URI(url).host.lowercase()
     /** The path the server lives under ("" at the root): a subpath install's remotes carry it in front of the repo. */
     val prefix: String get() = URI(url).path.trim('/')
+    val cliPath: String get() = resolveTool(forge.cli, cli)
 }
 
 class ServerEntry : BaseState() {
     var url by string("")
     var forge by string("GitLab")
     var login by string("Auto")
+    var cli by string("")
 }
 
-fun ServerEntry.toServer(): ReviewServer? = Forge.of(forge)?.let { f -> runCatching { ReviewServer(url ?: "", f, ServerLogin.of(login)).also { it.host } }.getOrNull() }
-fun ReviewServer.toEntry() = ServerEntry().also { it.url = url; it.forge = forge.title; it.login = login.name }
+fun ServerEntry.toServer(): ReviewServer? =
+    Forge.of(forge)?.let { f -> runCatching { ReviewServer(url ?: "", f, ServerLogin.of(login), cli ?: "").also { it.host } }.getOrNull() }
+fun ReviewServer.toEntry() = ServerEntry().also { it.url = url; it.forge = forge.title; it.login = login.name; it.cli = cli }
+
+/** The CLIs in their usual install folders or on PATH: for servers without an entry. */
+fun foundClis() = ForgeClis(findTool("glab"), findTool("gh"), findTool("tea"))
+
+/**
+ * Before 0.1.21 the CLI paths were global (`paths`: forge -> path). Each goes to the servers of its kind that have
+ * none; the ones no server took are returned, to tell you.
+ */
+fun takeOverCliPaths(servers: List<ReviewServer>, paths: Map<Forge, String>): Pair<List<ReviewServer>, Map<Forge, String>> {
+    val set = paths.filterValues { it.isNotBlank() }
+    val updated = servers.map { s -> set[s.forge]?.takeIf { s.cli.isBlank() }?.let { s.copy(cli = it) } ?: s }
+    return updated to set.filterKeys { f -> servers.none { it.forge == f } }
+}
 
 /** Tokens per server, in the password safe. */
 object ReviewTokens {
@@ -93,11 +112,11 @@ fun signInHint(forge: Forge, host: String) = when (forge) {
     Forge.Gitea -> "tea login add --url https://$host"
 }
 
-/** The CLI's API for `host` when it's signed in there, else null. */
-fun cliApi(forge: Forge, host: String, clis: ForgeClis): ForgeApi? = when (forge) {
-    Forge.GitLab -> clis.glab.takeIf { cliSignedIn(it, host) }?.let { glabApi(it, host) }
-    Forge.GitHub -> clis.gh.takeIf { cliSignedIn(it, host) }?.let { ghApi(it, host) }
-    Forge.Gitea -> teaLogins(clis.tea)[host.lowercase()]?.let { teaApi(clis.tea, it) }
+/** The API through the `forge`'s CLI `bin` when it's signed in to `host`, else null. */
+fun cliApi(forge: Forge, host: String, bin: String): ForgeApi? = when (forge) {
+    Forge.GitLab -> bin.takeIf { cliSignedIn(it, host) }?.let { glabApi(it, host) }
+    Forge.GitHub -> bin.takeIf { cliSignedIn(it, host) }?.let { ghApi(it, host) }
+    Forge.Gitea -> teaLogins(bin)[host.lowercase()]?.let { teaApi(bin, it) }
 }
 
 /**
@@ -108,7 +127,7 @@ fun reach(forge: Forge, host: String, server: ReviewServer?, token: String? = nu
     val web = server?.url?.trimEnd('/') ?: "https://$host"
     val login = server?.login ?: ServerLogin.Auto
     if (token == null && (login == ServerLogin.Auto || login == ServerLogin.Cli)) {
-        cliApi(forge, host, HerdrSettings.forgeClis())?.let { return Reach.Ready(it, forge.cli) }
+        cliApi(forge, host, server?.cliPath ?: findTool(forge.cli))?.let { return Reach.Ready(it, forge.cli) }
         if (login == ServerLogin.Cli) return Reach.Fail("${forge.cli} isn't signed in to $host: run `${signInHint(forge, host)}`.")
     }
     if (token == null && forge == Forge.GitLab && (login == ServerLogin.Auto || login == ServerLogin.Ide)) {
@@ -160,7 +179,7 @@ fun ideGitLabAccount(host: String): Pair<String, String>? = try {
 fun serverTable() = EntryTable<ReviewServer>(listOf(
     "URL" to { it.url },
     "Type" to { it.forge.title },
-    "Sign-in" to { s -> if (s.login == ServerLogin.Token) "Access token" + if (ReviewTokens.get(s.url) != null) " ••••" else " (none yet)" else s.login.title(s.forge) },
+    "Sign-in" to { s -> if (s.login == ServerLogin.Token) "Access token" + if (ReviewTokens.get(s.url) != null) " ••••" else " (none yet)" else s.login.title(s.forge) + s.cli.takeIf { it.isNotBlank() && s.login != ServerLogin.Ide }?.let { " · $it" }.orEmpty() },
 ), ::editServer)
 
 private fun editServer(parent: JComponent, s: ReviewServer?): ReviewServer? {
@@ -168,22 +187,26 @@ private fun editServer(parent: JComponent, s: ReviewServer?): ReviewServer? {
     val forge = ComboBox(Forge.entries.toTypedArray()).apply { selectedItem = s?.forge ?: Forge.GitLab; renderer = textListCellRenderer<Forge> { it?.title } }
     val login = ComboBox<ServerLogin>().apply { renderer = textListCellRenderer<ServerLogin> { it?.title(forge.selectedItem as Forge) } }
     val token = JBPasswordField()
+    val cli = JBTextField(s?.cli ?: "")
     val result = JBLabel(" ")
     fun parsed() = runCatching { URI(url.text.trim().trimEnd('/')).takeIf { (it.scheme == "https" || it.scheme == "http") && !it.host.isNullOrEmpty() } }.getOrNull()
     lateinit var loginHint: JEditorPane
     lateinit var tokenHint: JEditorPane
     lateinit var tokenRow: Row
+    lateinit var cliHint: JEditorPane
+    lateinit var cliRow: Row
     val content = panel {
         row("URL:") { cell(url).align(AlignX.FILL).comment("The server's web address, e.g. https://gitlab.example.com.") }
         row("Type:") { cell(forge) }
         row("Sign-in:") { loginHint = cell(login).comment(" ").comment!! }
+        cliRow = row("CLI path:") { cliHint = cell(cli).align(AlignX.FILL).comment(" ").comment!! }
         tokenRow = row("Token:") { tokenHint = cell(token).align(AlignX.FILL).comment(" ").comment!! }
         row {
             button("Test") {
                 val u = parsed() ?: return@button run { result.text = "Enter a valid URL first." }
                 val f = forge.selectedItem as Forge
                 val typed = String(token.password).trim().ifEmpty { null }
-                val server = ReviewServer(u.toString(), f, login.selectedItem as ServerLogin)
+                val server = ReviewServer(u.toString(), f, login.selectedItem as ServerLogin, cli.text.trim())
                 result.text = ProgressManager.getInstance().runProcessWithProgressSynchronously<String, Exception>({
                     when (val r = reach(f, server.host, server, typed)) {
                         is Reach.Ready -> runCatching { "Signed in as ${signedInAs(r.api)} (via ${r.via})." }.getOrElse { "Failed: ${it.message}" }
@@ -206,6 +229,8 @@ private fun editServer(parent: JComponent, s: ReviewServer?): ReviewServer? {
             ServerLogin.Ide -> "The account in Settings | Version Control | GitLab."
         }
         tokenHint.text = tokenHint(f)
+        cliHint.text = "Empty: ${f.cli} in the usual install folders, then PATH."
+        cliRow.visible(l == ServerLogin.Auto || l == ServerLogin.Cli)
         tokenRow.visible(l == ServerLogin.Auto || l == ServerLogin.Token)
     }
     fun showForge() {
@@ -227,7 +252,7 @@ private fun editServer(parent: JComponent, s: ReviewServer?): ReviewServer? {
         override fun doValidate() = if (parsed() == null) ValidationInfo("Enter the server's address, e.g. https://gitlab.example.com", url) else null
     }
     if (!dialog.showAndGet()) return null
-    val server = ReviewServer(parsed().toString(), forge.selectedItem as Forge, login.selectedItem as ServerLogin)
+    val server = ReviewServer(parsed().toString(), forge.selectedItem as Forge, login.selectedItem as ServerLogin, cli.text.trim())
     String(token.password).trim().ifEmpty { null }?.takeIf { server.login == ServerLogin.Auto || server.login == ServerLogin.Token }?.let { ReviewTokens.set(server.url, it) }
     return server
 }

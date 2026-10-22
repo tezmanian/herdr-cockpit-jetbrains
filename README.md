@@ -61,12 +61,13 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   line outside the diff becomes a note naming the file and line (GitLab: on the merge request; GitHub, Gitea: in the
   review's text). Quick actions (`/merge` at a line start) and mentions in the agent's text are defused.
   **Which forge and how to sign in:** Settings | Tools | Herdr Cockpit | **Review servers** is a table of servers (URL,
-  type, sign-in), with a Test button that shows who you're signed in as. Sign-in is a CLI (`glab`, `gh`, `tea`),
+  type, sign-in), with a Test button that shows who you're signed in as. Sign-in is a CLI (`glab`, `gh`, `tea`; its path
+  per server, empty: the usual install folders, then PATH),
   an access token (kept in the IDE's password safe, removed with the server, forgotten when the server rejects it), for
   GitLab the IDE's own account (Settings | Version Control | GitLab), or Automatic: that order, else it asks for a
   token. A server without an entry is detected: the review came from the GitLab tool window, a known host (gitlab.com,
   github.com, codeberg.org), a CLI signed in to it, or the server answers like one of the three. Unknown hosts get no
-  entry. The CLI paths can be set below the table.
+  entry.
   **Limit:** with a CLI signed in, an agent in a Herdr pane runs as the same user and can call it itself, so it could
   post or publish on its own. Only with a token (and the CLI signed out) does the token never reach the agents.
 - **Prompt library** (Settings | Tools | Herdr Cockpit | Prompts): a table of prompts, each with a name, a category and

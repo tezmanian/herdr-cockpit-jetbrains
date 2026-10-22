@@ -71,4 +71,15 @@ class ForgeTest {
         // 401 without GitLab's JSON (basic auth in front of anything): unknown.
         assertNull(probe(mapOf("/api/v4/version" to Triple(401, "<html>login</html>", null))))
     }
+
+    @Test
+    fun oldCliPathsMoveToTheServers() {
+        val lab = ReviewServer("https://git.example.com", Forge.GitLab, ServerLogin.Cli)
+        val own = ReviewServer("https://lab2.example.com", Forge.GitLab, ServerLogin.Auto, "/opt/glab")
+        val tea = ReviewServer("https://tea.example.com", Forge.Gitea, ServerLogin.Token)
+        val (servers, left) = takeOverCliPaths(listOf(lab, own, tea),
+            mapOf(Forge.GitLab to "~/bin/glab", Forge.GitHub to "/usr/local/bin/gh", Forge.Gitea to ""))
+        assertEquals(listOf(lab.copy(cli = "~/bin/glab"), own, tea), servers)
+        assertEquals(mapOf(Forge.GitHub to "/usr/local/bin/gh"), left)
+    }
 }
