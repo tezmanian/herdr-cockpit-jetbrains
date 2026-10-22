@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.22
+- Internal: the review flow (Review, Review Branch with Agent…, Review with Agent…, sending findings to a forge) moved
+  out of HerdrManage into ReviewFlow, which needs only a narrow ReviewHost from the service. The shared popups, dialogs
+  and background tasks live in ProjectUi. No change in behaviour.
+
 ## 0.1.21
 - Review servers: the CLI path (glab, gh or tea, by the server's type) is now set in the server's entry, shown for the
   sign-ins Automatic and CLI, instead of three global fields. Paths you had set move to your servers of that type

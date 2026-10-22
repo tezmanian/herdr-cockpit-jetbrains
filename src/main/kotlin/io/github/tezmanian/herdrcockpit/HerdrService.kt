@@ -53,7 +53,7 @@ private val PLUGIN_VERSION: String by lazy {
 }
 
 @Service(Service.Level.PROJECT)
-class HerdrService(private val project: Project) : Disposable {
+class HerdrService(private val project: Project) : Disposable, ReviewHost {
     companion object {
         fun getInstance(project: Project): HerdrService = project.service()
         private val LOG = Logger.getInstance(HerdrService::class.java)
@@ -72,10 +72,11 @@ class HerdrService(private val project: Project) : Disposable {
     private val activityExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-activity-loop").apply { isDaemon = true } }
     private val usageExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-usage-loop").apply { isDaemon = true } }
     private val client = HerdrClient { socketPath() }
-    val actions = HerdrActions(client)
+    override val actions = HerdrActions(client)
+    val reviewFlow = ReviewFlow(project, this)
     private val manage = HerdrManage(project, this)
     fun sendToAgent(context: String, path: String?) = manage.sendToAgent(context, path)
-    fun reviewChanges(files: List<String>, base: String, head: String) = manage.reviewChanges(files, base, head)
+    fun reviewChanges(files: List<String>, base: String, head: String) = reviewFlow.reviewChanges(files, base, head)
     private val activity = ActivityWatcher(client)
     private val git = GitCache { scheduleRender() }
     private val logLines = ArrayDeque<String>()
@@ -140,7 +141,7 @@ class HerdrService(private val project: Project) : Disposable {
     fun socketPath(): String = resolveSocketPath(customSocket())
     fun herdrEnvNow(): Map<String, String> = herdrEnv(customSocket()?.let { resolveSocketPath(it) })
 
-    fun log(line: String) {
+    override fun log(line: String) {
         LOG.info(line)
         synchronized(logLines) {
             logLines.addLast("${java.time.LocalTime.now().withNano(0)} $line")
@@ -148,8 +149,8 @@ class HerdrService(private val project: Project) : Disposable {
         }
     }
 
-    fun currentModel(): Model? = model
-    fun isConnected(): Boolean = conn is Conn.Connected
+    override fun currentModel(): Model? = model
+    override fun isConnected(): Boolean = conn is Conn.Connected
 
     /** How many agents are blocked and done right now. */
     fun attention(): Pair<Int, Int> = model?.spaces?.flatMap { it.agents }.orEmpty()
@@ -284,7 +285,7 @@ class HerdrService(private val project: Project) : Disposable {
             }
             val before = lastStatus[a.id]
             if (!firstLoad && before != null && a.status != null && before != a.status) notifyTransition(sp, a)
-            if (before == AgentStatus.working && a.status != AgentStatus.working) manage.agentSettled(sp, a)
+            if (before == AgentStatus.working && a.status != AgentStatus.working) reviewFlow.agentSettled(sp, a)
             lastStatus[a.id] = a.status
         }
         lastStatus.keys.retainAll(seen)
@@ -613,7 +614,7 @@ class HerdrService(private val project: Project) : Disposable {
             "copyDiagnostics" -> copyDiagnostics()
             "newSpace" -> manage.newSpace()
             "newTab" -> m?.space(spaceId)?.let { manage.newTab(it) }
-            "review" -> m?.space(spaceId)?.let { manage.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
+            "review" -> m?.space(spaceId)?.let { reviewFlow.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "menu" -> m?.space(spaceId)?.let { manage.menu(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "setupClaudeUsage" -> manage.setUpClaudeUsage()
             "setKiroCredits" -> manage.setKiroCredits()
@@ -746,9 +747,7 @@ class HerdrService(private val project: Project) : Disposable {
 
     fun showToolWindow() = ToolWindowManager.getInstance(project).getToolWindow("Herdr")?.show()
 
-    fun notify(html: String, type: NotificationType) = ApplicationManager.getApplication().invokeLater {
-        if (!project.isDisposed) NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit").createNotification(html, type).notify(project)
-    }
+    fun notify(html: String, type: NotificationType) = herdrNotify(project, html, type)
 
     private fun edt(f: () -> Unit) = ApplicationManager.getApplication().invokeLater({ if (!project.isDisposed) f() }, project.disposed)
 

@@ -335,7 +335,9 @@ For screenshots, a pane can pose as an agent without starting one:
 | `TermFind.kt`, `HerdrPaneFind.kt` | find in a pane's whole history (port of `termFind.ts`) and the pane tab's find bar |
 | `TermEdit.kt` | editing the typed line (delete/replace a selection, Alt+click) and selecting past the edge (port of `termScreen.ts`) |
 | `Claims.kt` | `~/.herdr-cockpit/claims`: which window took a pane (shared with the VS Code extension) |
-| `HerdrManage.kt` | dialogs and popups: new space/tab, rename, close, review, context menu, Show Raw, usage setup |
+| `HerdrManage.kt` | dialogs and popups: new space/tab, rename, close, hand off, context menu, Show Raw, usage setup |
+| `ReviewFlow.kt` | Review, agent reviews and sending their findings to a forge; needs only `ReviewHost` from the service |
+| `ProjectUi.kt` | popups, input and prompt dialogs, background tasks and notifications shared by HerdrManage and ReviewFlow |
 | `HerdrStatusBar.kt` | status bar widget and tool window badge |
 | `HerdrHelp.kt` | help page (`media/help.html`) in a JCEF editor tab |
 | `HerdrLinks.kt` | links from the Herdr plugin: built-in server endpoint, `~/.herdr-cockpit/jetbrains.json` |
