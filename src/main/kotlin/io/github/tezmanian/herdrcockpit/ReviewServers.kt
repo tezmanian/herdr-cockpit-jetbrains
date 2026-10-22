@@ -18,21 +18,43 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.Row
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.google.gson.JsonParser
 import java.net.URI
+import javax.swing.DefaultComboBoxModel
 import javax.swing.JComponent
+import javax.swing.JEditorPane
 import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 
 /** How to sign in to a server. */
-enum class ServerLogin(val title: String) {
-    Auto("Automatic"), Cli("CLI (glab, gh, tea)"), Token("Access token"), Ide("IDE account (GitLab)");
+enum class ServerLogin {
+    Auto, Cli, Token, Ide;
+
+    fun title(forge: Forge) = when (this) {
+        Auto -> "Automatic"
+        Cli -> "CLI (${forge.cli})"
+        Token -> "Access token"
+        Ide -> "IDE account"
+    }
 
     companion object {
         fun of(name: String?) = entries.firstOrNull { it.name == name } ?: Auto
+        /** The ways into a `forge`: the IDE keeps accounts only for GitLab. */
+        fun options(forge: Forge) = entries.filter { it != Ide || forge == Forge.GitLab }
     }
 }
+
+/** What "Automatic" tries for a `forge`, in order. */
+private fun autoHint(forge: Forge) =
+    "Automatic: a signed-in ${forge.cli}, " + (if (forge == Forge.GitLab) "then the IDE's GitLab account, " else "") + "else the token."
+
+private fun tokenHint(forge: Forge) = when (forge) {
+    Forge.GitLab -> "Personal access token with scope api."
+    Forge.GitHub -> "Fine-grained token with pull requests read and write."
+    Forge.Gitea -> "Access token with repository read and write."
+} + " Empty keeps the stored one. Kept in the IDE's password safe."
 
 /** A server you set up: its web address ("https://host" or a subpath install), its kind and how to sign in. */
 data class ReviewServer(val url: String, val forge: Forge, val login: ServerLogin) {
@@ -138,25 +160,24 @@ fun ideGitLabAccount(host: String): Pair<String, String>? = try {
 fun serverTable() = EntryTable<ReviewServer>(listOf(
     "URL" to { it.url },
     "Type" to { it.forge.title },
-    "Sign-in" to { s -> if (s.login == ServerLogin.Token) "Access token" + if (ReviewTokens.get(s.url) != null) " ••••" else " (none yet)" else s.login.title },
+    "Sign-in" to { s -> if (s.login == ServerLogin.Token) "Access token" + if (ReviewTokens.get(s.url) != null) " ••••" else " (none yet)" else s.login.title(s.forge) },
 ), ::editServer)
 
 private fun editServer(parent: JComponent, s: ReviewServer?): ReviewServer? {
     val url = JBTextField(s?.url ?: "https://")
     val forge = ComboBox(Forge.entries.toTypedArray()).apply { selectedItem = s?.forge ?: Forge.GitLab; renderer = textListCellRenderer<Forge> { it?.title } }
-    val login = ComboBox(ServerLogin.entries.toTypedArray()).apply { selectedItem = s?.login ?: ServerLogin.Auto; renderer = textListCellRenderer<ServerLogin> { it?.title } }
+    val login = ComboBox<ServerLogin>().apply { renderer = textListCellRenderer<ServerLogin> { it?.title(forge.selectedItem as Forge) } }
     val token = JBPasswordField()
     val result = JBLabel(" ")
     fun parsed() = runCatching { URI(url.text.trim().trimEnd('/')).takeIf { (it.scheme == "https" || it.scheme == "http") && !it.host.isNullOrEmpty() } }.getOrNull()
+    lateinit var loginHint: JEditorPane
+    lateinit var tokenHint: JEditorPane
+    lateinit var tokenRow: Row
     val content = panel {
         row("URL:") { cell(url).align(AlignX.FILL).comment("The server's web address, e.g. https://gitlab.example.com.") }
         row("Type:") { cell(forge) }
-        row("Sign-in:") {
-            cell(login).comment("Automatic: a signed-in CLI (glab, gh, tea), for GitLab the IDE's account, else the token.")
-        }
-        row("Token:") {
-            cell(token).align(AlignX.FILL).comment("Personal access token (GitLab: scope api; GitHub: pull requests read and write; Gitea: repository read and write). Empty keeps the stored one. Kept in the IDE's password safe.")
-        }
+        row("Sign-in:") { loginHint = cell(login).comment(" ").comment!! }
+        tokenRow = row("Token:") { tokenHint = cell(token).align(AlignX.FILL).comment(" ").comment!! }
         row {
             button("Test") {
                 val u = parsed() ?: return@button run { result.text = "Enter a valid URL first." }
@@ -174,15 +195,39 @@ private fun editServer(parent: JComponent, s: ReviewServer?): ReviewServer? {
             cell(result)
         }
     }
+    // Sign-in offers only what the type supports; the hints and the token row follow the choice.
+    fun showLogin() {
+        val f = forge.selectedItem as Forge
+        val l = login.selectedItem as ServerLogin
+        loginHint.text = when (l) {
+            ServerLogin.Auto -> autoHint(f)
+            ServerLogin.Cli -> "Sign in once with: ${signInHint(f, parsed()?.host ?: "<host>")}"
+            ServerLogin.Token -> "Only the token below."
+            ServerLogin.Ide -> "The account in Settings | Version Control | GitLab."
+        }
+        tokenHint.text = tokenHint(f)
+        tokenRow.visible(l == ServerLogin.Auto || l == ServerLogin.Token)
+    }
+    fun showForge() {
+        val options = ServerLogin.options(forge.selectedItem as Forge)
+        val keep = (login.selectedItem as ServerLogin?) ?: s?.login
+        login.model = DefaultComboBoxModel(options.toTypedArray())
+        login.selectedItem = keep?.takeIf { it in options } ?: ServerLogin.Auto
+        showLogin()
+    }
+    showForge()
+    forge.addActionListener { showForge(); result.text = " " }
+    login.addActionListener { showLogin(); result.text = " " }
     val dialog = object : DialogWrapper(parent, true) {
         init { title = if (s == null) "New Review Server" else "Edit Review Server"; init(); initValidation() }
         override fun createCenterPanel() = content
         override fun getPreferredFocusedComponent(): JComponent = url
+        // A DSL panel turns continuous validation off: OK would stay disabled after the first check.
+        override fun continuousValidation() = true
         override fun doValidate() = if (parsed() == null) ValidationInfo("Enter the server's address, e.g. https://gitlab.example.com", url) else null
     }
     if (!dialog.showAndGet()) return null
     val server = ReviewServer(parsed().toString(), forge.selectedItem as Forge, login.selectedItem as ServerLogin)
-    String(token.password).trim().ifEmpty { null }?.let { ReviewTokens.set(server.url, it) }
+    String(token.password).trim().ifEmpty { null }?.takeIf { server.login == ServerLogin.Auto || server.login == ServerLogin.Token }?.let { ReviewTokens.set(server.url, it) }
     return server
 }
-

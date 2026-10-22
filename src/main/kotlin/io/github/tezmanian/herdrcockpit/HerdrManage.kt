@@ -413,6 +413,8 @@ class HerdrManage(private val project: Project, private val service: HerdrServic
             init { this.title = title; init(); initValidation() }
             override fun createCenterPanel() = content
             override fun getPreferredFocusedComponent() = area
+            // A DSL panel turns continuous validation off: OK would stay disabled after the first check.
+            override fun continuousValidation() = true
             override fun doValidate() =
                 if (required != null && (area.text.isBlank() || area.text.trim() == initial.trim())) ValidationInfo(required, area) else null
         }

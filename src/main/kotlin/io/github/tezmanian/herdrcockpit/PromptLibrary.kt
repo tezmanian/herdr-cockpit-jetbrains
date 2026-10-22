@@ -76,6 +76,8 @@ private fun editPrompt(parent: JComponent, p: SavedPrompt?): SavedPrompt? {
         init { title = if (p == null) "New Prompt" else "Edit Prompt"; init(); initValidation() }
         override fun createCenterPanel() = content
         override fun getPreferredFocusedComponent(): JComponent = if (p == null) name else text
+        // A DSL panel turns continuous validation off: OK would stay disabled after the first check.
+        override fun continuousValidation() = true
         override fun doValidate() = when {
             name.text.isBlank() -> ValidationInfo("Give it a name", name)
             text.text.isBlank() -> ValidationInfo("Write the prompt", text)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.20
+- Fixed OK staying disabled in the review server and prompt dialogs after the first check, e.g. when the URL started
+  as "https://".
+- Review server dialog: Sign-in offers only what the type supports (the IDE account only for GitLab, the CLI by its
+  name), its hints and the token's scopes follow the type, and the token field shows only where a token is used.
+
 ## 0.1.19
 - Send an agent review to GitHub and Gitea too, as a pending review on the pull request (GitLab: draft notes as
   before). One flow for all three: find the request (choose when several fit), preview with checkboxes, nothing
