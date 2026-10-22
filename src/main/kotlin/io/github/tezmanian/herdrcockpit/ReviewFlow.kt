@@ -78,7 +78,7 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
                 } ?: return@later
                 val out = reviewFile(File(System.getProperty("user.home")), space.label, branch)
                 val extra = reviewInstructions(name) ?: return@later
-                val template = HerdrSettings.branchReviewTemplate()
+                val template = reviewTemplate(project, BRANCH_TEMPLATE, DEFAULT_BRANCH_TEMPLATE)
                 startReview(name, pane.id, PendingReview(root, out, System.currentTimeMillis(), branch, head)) {
                     reviewPrompt(root, branch, target, out, extra, gitChangedFiles(root, target).orEmpty(), template)
                 }
@@ -104,7 +104,7 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
                     Item("$name (${a.status ?: AgentStatus.unknown})", null) {
                         val out = reviewFile(File(System.getProperty("user.home")), s.label, "mr-" + head.take(12))
                         val extra = reviewInstructions(name) ?: return@Item
-                        val template = HerdrSettings.changesReviewTemplate()
+                        val template = reviewTemplate(project, CHANGES_TEMPLATE, DEFAULT_CHANGES_TEMPLATE)
                         startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head, Forge.GitLab)) {
                             reviewChangesPrompt(root, base, head, paths, out, extra, template)
                         }

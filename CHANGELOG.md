@@ -1,10 +1,11 @@
 # Changelog
 
 ## 0.1.23
-- Review prompts: what Review Branch with Agent… and Review with Agent… send is now a template each, under Settings |
-  Tools | Herdr Cockpit | Review prompts, with the variables {repo}, {branch}, {target}, {base}, {head}, {diff},
-  {files}, {instructions}, {out} and {format}. Lines whose variables are all empty are left out; a template without
-  {out} gets the findings-file rules appended. Branch reviews now also list the changed files.
+- Review templates: what Review Branch with Agent… and Review with Agent… send now comes from the prompt library, in
+  the new categories "branch template" and "changes template" (the first entry wins, yours before the project's), with
+  the variables {repo}, {branch}, {target}, {base}, {head}, {diff}, {files}, {instructions}, {out} and {format}. Lines
+  whose variables are all empty are left out; a template without {out} gets the findings-file rules appended. The
+  built-in templates are added to your library once. Branch reviews now also list the changed files.
 - More detailed built-in presets: Security, Real bugs only, Missing tests, Explain and flag risks, Write unit tests.
   They replace the short presets of earlier versions in your library, unless you edited them.
 

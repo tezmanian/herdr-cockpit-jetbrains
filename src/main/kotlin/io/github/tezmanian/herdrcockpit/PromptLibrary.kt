@@ -54,6 +54,16 @@ fun promptPresets(project: Project, category: String): List<Pair<String, String>
     return own + project.service<HerdrProjectPrompts>().prompts.filter { it.category == category }.map { "${it.name} (project)" to it.text }
 }
 
+/** What each category is for, in the settings. */
+val CATEGORY_HELP = "review: presets in Review Branch with Agent… and Review with Agent…; general: in Send to Agent… and " +
+    "Hand Off to Agent…; $BRANCH_TEMPLATE / $CHANGES_TEMPLATE: the whole prompt those two reviews send (the first one " +
+    "wins, yours before the project's; none: the built-in one). Templates take " +
+    REVIEW_VARIABLES.joinToString(", ") { "{${it.first}}" } + ". A line whose variables are all empty is left out; " +
+    "without {out} the rules for the findings file are added."
+
+/** The prompt a review of `category` (BRANCH_TEMPLATE or CHANGES_TEMPLATE) sends: the first in the library, else `default`. */
+fun reviewTemplate(project: Project, category: String, default: String) = promptPresets(project, category).firstOrNull()?.second ?: default
+
 /** A table of prompts: Name | Category | Text. */
 fun promptTable() = EntryTable<SavedPrompt>(listOf(
     "Name" to { it.name },
@@ -68,7 +78,7 @@ private fun editPrompt(parent: JComponent, p: SavedPrompt?): SavedPrompt? {
     val content = panel {
         row("Name:") { cell(name).align(AlignX.FILL) }
         row("Category:") {
-            cell(category).comment("review: Review Branch with Agent… and Review with Agent…; general: Send to Agent… and Hand Off to Agent….")
+            cell(category).comment(CATEGORY_HELP.replace("{", "<code>{").replace("}", "}</code>"))
         }
         row { scrollCell(text).align(Align.FILL) }.resizableRow()
     }

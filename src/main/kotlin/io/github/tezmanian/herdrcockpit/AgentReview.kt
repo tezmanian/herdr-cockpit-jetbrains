@@ -21,7 +21,7 @@ private const val RULES =
         "Write your findings to {out} as a JSON array and nothing else: {format}, or [] if you found nothing. " +
         "In each body, say what goes wrong and in which situation."
 
-/** "Review Branch with Agent…": the template's default (Settings | Tools | Herdr Cockpit | Review prompts). */
+/** "Review Branch with Agent…": the built-in template (the library's "branch template" entries replace it). */
 const val DEFAULT_BRANCH_TEMPLATE =
     "Review the changes of branch {branch} against {target} in {repo}.\n\n" +
         "Run `{diff}` there and read the code around each change, not only the changed lines: callers, the types involved, " +

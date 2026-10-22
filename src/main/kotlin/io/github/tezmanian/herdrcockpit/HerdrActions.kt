@@ -25,10 +25,12 @@ fun agentName(kind: String, taken: Collection<String>): String {
     return "$base-$n"
 }
 
-/** A saved prompt: `category` "review" (the reviews) or "general" (Send to Agent, Hand Off). */
+/** A saved prompt: `category` "review" (the reviews), "general" (Send to Agent, Hand Off) or one of the review templates. */
 data class SavedPrompt(val name: String, val category: String, val text: String)
 
-val PROMPT_CATEGORIES = listOf("review", "general")
+const val BRANCH_TEMPLATE = "branch template"
+const val CHANGES_TEMPLATE = "changes template"
+val PROMPT_CATEGORIES = listOf("review", "general", BRANCH_TEMPLATE, CHANGES_TEMPLATE)
 
 /** The old "Prompts" setting (one "category: text" per line, no category = "general") as entries named after their text. */
 fun promptsFromLines(setting: String?): List<SavedPrompt> =
@@ -67,6 +69,12 @@ val DEFAULT_PROMPTS = listOf(
         "Write unit tests for this with the project's existing test framework and conventions. Cover the normal cases, edge " +
             "cases and error paths. Run them; fix a test that is wrong, but if one fails because of a bug in the code, don't " +
             "change the code: report the bug."),
+)
+
+/** The review templates as library entries, added once next to the presets. */
+val DEFAULT_TEMPLATES = listOf(
+    SavedPrompt("Branch review", BRANCH_TEMPLATE, DEFAULT_BRANCH_TEMPLATE),
+    SavedPrompt("Merge request review", CHANGES_TEMPLATE, DEFAULT_CHANGES_TEMPLATE),
 )
 
 /** `prompts` with each untouched legacy preset replaced by its successor; your own and edited ones stay. */

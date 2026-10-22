@@ -230,12 +230,14 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
   in trusted projects and are marked "(project)". The earlier one-prompt-per-line setting is taken over once. The
   built-in presets (Security, Real bugs only, Missing tests, Explain and flag risks, Write unit tests) replace the
   short ones of earlier versions, unless you edited those.
-- **Review prompts** (Settings | Tools | Herdr Cockpit | Review prompts): the whole text that Review Branch with Agent…
-  and Review with Agent… send, as two templates with variables: `{repo}`, `{branch}`, `{target}`, `{base}`, `{head}`,
+- **Review templates**, in the same table: the categories `branch template` and `changes template` hold the whole
+  text that Review Branch with Agent… and Review with Agent… send (the first entry of each wins, yours before the
+  project's; with none, the built-in one is used). Variables: `{repo}`, `{branch}`, `{target}`, `{base}`, `{head}`,
   `{diff}` (the git diff command for exactly these changes), `{files}` (the changed files, quoted for the shell),
   `{instructions}` (what you typed in the review dialog), `{out}` (the findings file) and `{format}` (its JSON format).
   A line whose variables are all empty is left out. A template without `{out}` gets the rules for the findings file
-  appended, because without them the review never comes back. Clearing a template restores the default.
+  appended, because without them the review never comes back. The built-in templates are added to your library once,
+  to edit there.
 
   ![The prompt library and the agents offered for new tabs](docs/images/prompts.png)
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
@@ -350,4 +352,4 @@ For screenshots, a pane can pose as an agent without starting one:
 | `HerdrHelp.kt` | help page (`media/help.html`) in a JCEF editor tab |
 | `HerdrLinks.kt` | links from the Herdr plugin: built-in server endpoint, `~/.herdr-cockpit/jetbrains.json` |
 | `HerdrSettings.kt` | application settings + configurable |
-| `PromptLibrary.kt` | prompt library: storage (IDE-wide, per project), the prompt table, Project Prompts settings |
+| `PromptLibrary.kt` | prompt library: storage (IDE-wide, per project), the prompt table, the review templates, Project Prompts settings |
