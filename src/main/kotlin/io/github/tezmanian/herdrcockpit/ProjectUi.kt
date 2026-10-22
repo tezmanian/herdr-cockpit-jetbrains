@@ -54,10 +54,24 @@ abstract class ProjectUi(protected val project: Project, private val log: (Strin
      * A prompt dialog with the library prompts of `category` (yours, then the trusted project's) as presets: picking one fills the text
      * after `initial`. With `required`, OK needs text beyond `initial` (the message says what). Null when cancelled.
      */
-    protected fun promptDialog(title: String, message: String, category: String, initial: String, required: String?): String? {
+    protected fun promptDialog(title: String, message: String, category: String, initial: String, required: String?): String? =
+        promptDialog(title, message, category, initial, required, emptyList())?.first
+
+    /**
+     * The prompt dialog, plus a choice among `templates` (label, text) when there are several; (text, chosen template's text,
+     * the first when there's no choice, "" without templates). Null when cancelled.
+     */
+    protected fun promptDialog(title: String, message: String, category: String, initial: String, required: String?,
+                               templates: List<Pair<String, String>>): Pair<String, String>? {
         val presets = promptPresets(project, category)
         val area = JBTextArea(initial, 10, 70).apply { lineWrap = true; wrapStyleWord = true }
+        var template = templates.firstOrNull()?.second ?: ""
         val content = panel {
+            if (templates.size > 1) row("Template:") {
+                comboBox(templates.map { it.first }).applyToComponent {
+                    addActionListener { template = templates[selectedIndex].second }
+                }.comment("The whole prompt the review sends (prompt library, categories ending in \"template\").")
+            }
             row { label(message) }
             if (presets.isNotEmpty()) row("Preset:") {
                 comboBox(listOf("") + presets.map { it.first }).applyToComponent {
@@ -75,7 +89,7 @@ abstract class ProjectUi(protected val project: Project, private val log: (Strin
             override fun doValidate() =
                 if (required != null && (area.text.isBlank() || area.text.trim() == initial.trim())) ValidationInfo(required, area) else null
         }
-        return if (dialog.showAndGet()) area.text.trim() else null
+        return if (dialog.showAndGet()) area.text.trim() to template else null
     }
 
     protected fun later(f: () -> Unit) = ApplicationManager.getApplication().invokeLater(f, project.disposed)

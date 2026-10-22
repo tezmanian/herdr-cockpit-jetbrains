@@ -231,8 +231,8 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
   built-in presets (Security, Real bugs only, Missing tests, Explain and flag risks, Write unit tests) replace the
   short ones of earlier versions, unless you edited those.
 - **Review templates**, in the same table: the categories `branch template` and `changes template` hold the whole
-  text that Review Branch with Agent… and Review with Agent… send (the first entry of each wins, yours before the
-  project's; with none, the built-in one is used). Variables: `{repo}`, `{branch}`, `{target}`, `{base}`, `{head}`,
+  text that Review Branch with Agent… and Review with Agent… send. With several of a category, the review dialog
+  offers them under "Template:" (yours first, then the project's); with none, the built-in one is used. Variables: `{repo}`, `{branch}`, `{target}`, `{base}`, `{head}`,
   `{diff}` (the git diff command for exactly these changes), `{files}` (the changed files, quoted for the shell),
   `{instructions}` (what you typed in the review dialog), `{out}` (the findings file) and `{format}` (its JSON format).
   A line whose variables are all empty is left out. A template without `{out}` gets the rules for the findings file

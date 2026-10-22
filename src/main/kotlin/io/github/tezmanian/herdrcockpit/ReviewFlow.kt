@@ -77,8 +77,7 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
                     if (!isValidBranch(it)) "Not a valid branch name" else null
                 } ?: return@later
                 val out = reviewFile(File(System.getProperty("user.home")), space.label, branch)
-                val extra = reviewInstructions(name) ?: return@later
-                val template = reviewTemplate(project, BRANCH_TEMPLATE, DEFAULT_BRANCH_TEMPLATE)
+                val (extra, template) = reviewInstructions(name, BRANCH_TEMPLATE, DEFAULT_BRANCH_TEMPLATE) ?: return@later
                 startReview(name, pane.id, PendingReview(root, out, System.currentTimeMillis(), branch, head)) {
                     reviewPrompt(root, branch, target, out, extra, gitChangedFiles(root, target).orEmpty(), template)
                 }
@@ -103,8 +102,7 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
                     val name = editorTitle(s, s.tabs.firstOrNull { it.id == a.tabId }, a)
                     Item("$name (${a.status ?: AgentStatus.unknown})", null) {
                         val out = reviewFile(File(System.getProperty("user.home")), s.label, "mr-" + head.take(12))
-                        val extra = reviewInstructions(name) ?: return@Item
-                        val template = reviewTemplate(project, CHANGES_TEMPLATE, DEFAULT_CHANGES_TEMPLATE)
+                        val (extra, template) = reviewInstructions(name, CHANGES_TEMPLATE, DEFAULT_CHANGES_TEMPLATE) ?: return@Item
                         startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head, Forge.GitLab)) {
                             reviewChangesPrompt(root, base, head, paths, out, extra, template)
                         }
@@ -114,9 +112,10 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
         }
     }
 
-    /** Optional extra instructions for the review ("" when left empty); null when cancelled. */
-    private fun reviewInstructions(name: String): String? =
-        promptDialog("Review with $name", "Anything $name should look at in particular? (optional)", "review", "", null)
+    /** Optional extra instructions ("" when left empty) and the template to send them with; null when cancelled. */
+    private fun reviewInstructions(name: String, templateCategory: String, default: String): Pair<String, String>? =
+        promptDialog("Review with $name", "Anything $name should look at in particular? (optional)", "review", "", null,
+            reviewTemplates(project, templateCategory, default))
 
     /** Sends the prompt `text` builds (in the background: it may run git). */
     private fun startReview(name: String, paneId: String, review: PendingReview, text: () -> String) = run("Review with $name") {

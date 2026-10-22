@@ -56,13 +56,13 @@ fun promptPresets(project: Project, category: String): List<Pair<String, String>
 
 /** What each category is for, in the settings. */
 val CATEGORY_HELP = "review: presets in Review Branch with Agent… and Review with Agent…; general: in Send to Agent… and " +
-    "Hand Off to Agent…; $BRANCH_TEMPLATE / $CHANGES_TEMPLATE: the whole prompt those two reviews send (the first one " +
-    "wins, yours before the project's; none: the built-in one). Templates take " +
+    "Hand Off to Agent…; $BRANCH_TEMPLATE / $CHANGES_TEMPLATE: the whole prompt those two reviews send (with several, " +
+    "the review dialog lets you pick, yours first; none: the built-in one). Templates take " +
     REVIEW_VARIABLES.joinToString(", ") { "{${it.first}}" } + ". A line whose variables are all empty is left out; " +
     "without {out} the rules for the findings file are added."
 
-/** The prompt a review of `category` (BRANCH_TEMPLATE or CHANGES_TEMPLATE) sends: the first in the library, else `default`. */
-fun reviewTemplate(project: Project, category: String, default: String) = promptPresets(project, category).firstOrNull()?.second ?: default
+/** The templates a review of `category` (BRANCH_TEMPLATE or CHANGES_TEMPLATE) can send, as (label, text): the library's, else the built-in one. */
+fun reviewTemplates(project: Project, category: String, default: String) = promptPresets(project, category).ifEmpty { listOf("Built-in" to default) }
 
 /** A table of prompts: Name | Category | Text. */
 fun promptTable() = EntryTable<SavedPrompt>(listOf(
