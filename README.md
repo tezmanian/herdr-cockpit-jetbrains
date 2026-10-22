@@ -8,7 +8,152 @@ from that project unchanged (see `THIRD_PARTY_NOTICES.md`); `media/help.html` is
 
 The plugin is a **client of the Herdr server**. It never owns agent processes; Herdr does.
 
-## What works (MVP, v0.1.9)
+![The Herdr tool window next to a pane's editor tab](docs/images/sidebar.png)
+
+## Requirements
+
+| What | Version | Needed for |
+|---|---|---|
+| A JetBrains IDE | 2025.3 or newer (build 253+): PhpStorm, IntelliJ IDEA, WebStorm, PyCharm, GoLand, … | the plugin |
+| [Herdr](https://herdr.dev) | 0.9.1 – 0.9.3 (socket protocol 22) | everything |
+| git | any recent | the git line, Review, worktrees |
+| macOS or Linux | | the plugin talks to Herdr's Unix socket; see [Windows](#windows) |
+| `curl` or `wget` | | optional: the Herdr plugin (links from Herdr to the IDE) |
+| `glab`, `gh`, `tea` | | optional: sending reviews to GitLab, GitHub, Gitea with the CLI's login |
+| Coding agents | Claude Code, Codex, Kiro, Cursor, … | optional: whatever you want to run in Herdr |
+
+## Installation
+
+Four parts, in this order. Only 1 and 3 are required.
+
+1. **Herdr** itself
+2. Herdr's **agent integrations** and **agent skill** (recommended)
+3. This **IDE plugin**
+4. The **Herdr plugin** in `herdr-plugin/` (optional, for links from Herdr to the IDE)
+
+### 1. Install Herdr
+
+**macOS and Linux:**
+
+```bash
+curl -fsSL https://herdr.dev/install.sh | sh
+herdr --version
+```
+
+The script installs to `~/.local/bin` (set `HERDR_INSTALL_DIR` for another folder) and warns when that folder isn't
+on your PATH. Add it to your shell profile if needed:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+The plugin also finds `herdr` without PATH, which matters when the IDE is started from the Dock or a desktop launcher
+and gets a minimal PATH. It looks in these folders first:
+
+| OS | Folders checked before PATH |
+|---|---|
+| macOS | `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.cargo/bin`, `~/.nix-profile/bin`, `/run/current-system/sw/bin` |
+| Linux | `~/.local/bin`, `/usr/local/bin`, `/usr/bin`, `/home/linuxbrew/.linuxbrew/bin`, `~/.linuxbrew/bin`, `~/.cargo/bin`, `~/.nix-profile/bin`, `/run/current-system/sw/bin`, `/snap/bin` |
+
+Elsewhere: set the path in *Settings | Tools | Herdr Cockpit | herdr binary*.
+
+You don't need to start Herdr yourself: the plugin's tool window offers **Start Herdr** (a headless server in the
+background) and **Open Herdr TUI**. To use Herdr in a terminal as well, run `herdr`; both attach to the same session.
+
+### 2. Agent integrations and the agent skill (recommended)
+
+**Integrations** are small hooks that report an agent's session to Herdr, next to Herdr's own screen detection of
+its state ("Working", "Blocked", "Done"), which the sidebar shows. Install one per agent you use; the agent's config
+folder must exist (run the agent once first). Details: [herdr.dev/docs/integrations](https://herdr.dev/docs/integrations).
+
+```bash
+herdr integration install claude     # Claude Code (~/.claude, or CLAUDE_CONFIG_DIR)
+herdr integration install codex      # Codex (~/.codex, or CODEX_HOME)
+herdr integration install cursor     # also: pi, omp, copilot, devin, droid, kimi, opencode, kilo, hermes, qodercli, qwen, letta, mastracode, antigravity-cli, grok
+```
+
+The same is in Herdr's settings, tab *Integrations*.
+
+The **agent skill** teaches an agent running in a Herdr pane to use the `herdr` CLI: look at neighbouring panes, run
+commands without stealing focus, wait for tests, start helper agents. It also lets an agent read another agent's
+output when you use *Hand Off to Agent…*. Install it for all supported agents:
+
+```bash
+npx skills add herdrdev/herdr --skill herdr -g      # needs Node.js; omit -g to install it into the current project only
+```
+
+Without Node.js, write the copy bundled with your Herdr version where your agent reads skills, for example for Claude
+Code:
+
+```bash
+mkdir -p ~/.claude/skills/herdr && herdr --skill > ~/.claude/skills/herdr/SKILL.md
+```
+
+For agents without a skill system, paste the output of `herdr --skill` into the agent's instructions. The skill only
+acts when the agent runs inside a Herdr pane (`HERDR_ENV=1`), which is the case for every agent started from the
+plugin.
+
+### 3. Install the IDE plugin
+
+The plugin isn't on the JetBrains Marketplace; install the zip by hand.
+
+1. Get `herdr-cockpit-jetbrains-<version>.zip`:
+   - from the [releases](https://github.com/tezmanian/herdr-cockpit-jetbrains/releases) (once a version is tagged), or
+   - from a CI run: the artifact `herdr-cockpit-plugin` of the *build* workflow, or
+   - build it: needs JDK 21 (the Gradle wrapper downloads Gradle and the IntelliJ Platform):
+     ```bash
+     git clone https://github.com/tezmanian/herdr-cockpit-jetbrains.git
+     cd herdr-cockpit-jetbrains
+     ./gradlew buildPlugin      # -> build/distributions/herdr-cockpit-jetbrains-<version>.zip
+     ```
+2. In the IDE: *Settings | Plugins | ⚙ | Install Plugin from Disk…*, pick the zip (not its contents) and restart the
+   IDE. On macOS *Settings* is *PhpStorm | Settings…* (⌘,).
+3. Open the **Herdr** tool window (left side). If Herdr isn't running, it says so and offers **Start Herdr**.
+
+To update, install the newer zip the same way. To remove it: *Settings | Plugins | Installed | Herdr Cockpit |
+Uninstall*. The plugin keeps a few files in `~/.herdr-cockpit/` (links file, pane claims, reviews), which you can
+delete afterwards.
+
+### 4. The Herdr plugin (optional: from Herdr to the IDE)
+
+Adds three actions to Herdr's action menu: *Open in JetBrains IDE* (the space and pane you're on), *Open selected
+file* (a `path:line:col` you selected in a pane) and *Review changes*. Needs `curl` or `wget`; macOS and Linux only.
+
+```bash
+herdr plugin install tezmanian/herdr-cockpit-jetbrains/herdr-plugin
+herdr plugin list                    # shows tezmanian.herdr-cockpit-jetbrains
+```
+
+It reaches the IDE through `~/.herdr-cockpit/jetbrains.json`, which the IDE plugin writes on start, so the IDE has to
+be running. With two JetBrains IDEs open, the one started last gets the links.
+
+### Windows
+
+Not supported natively yet. Herdr runs on Windows, but there its socket is a named pipe, while this plugin speaks to
+a Unix domain socket; the Herdr plugin in `herdr-plugin/` is a POSIX shell script.
+
+What should work is **WSL 2** with everything inside the Linux side: install Herdr there (the Linux steps above) and
+run the JetBrains IDE inside WSL too (WSLg shows its window on the Windows desktop), so both see the same socket. An
+IDE running on Windows can't reach a socket inside WSL. This setup isn't tested yet; reports are welcome in the
+[issues](https://github.com/tezmanian/herdr-cockpit-jetbrains/issues).
+
+### Settings and troubleshooting
+
+*Settings | Tools | Herdr Cockpit*:
+
+![Settings: connection and review servers](docs/images/settings.png)
+
+- **herdr binary** and **Socket**: leave empty normally. The socket follows `HERDR_SOCKET_PATH`, then
+  `HERDR_SESSION`, else `~/.config/herdr/herdr.sock`; a path `…/sessions/<name>/herdr.sock` selects that named
+  session.
+- The disconnected screen tells *not installed*, *not running*, *crashed*, *incompatible* (a Herdr version with
+  another protocol) and *unreachable* apart. The status bar menu has *Copy Diagnostics* for a bug report.
+- Usage bars for Claude Code's plan limits need its status line: *Show plan limits…* in the sidebar sets it up (it
+  never replaces one you already have).
+
+## Features
+
+![Right-click an agent](docs/images/context-menu.png)
 
 - **Herdr tool window** (left side): spaces, agents and shells with status, "Needs you", shell activity
   (what's running / last command / last output), git line per space (branch, last commit, ahead/behind, changes).
@@ -38,6 +183,8 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   space's repository. **New tab** (in every space): a shell, a named shell, or an agent (your favorites first, the
   rest under "More agents…"). The new pane opens as an editor tab right away; an agent is started in it in the
   background. Herdr's own focus doesn't jump (`focus:false`).
+
+  ![New tab: a shell or an agent](docs/images/new-tab.png)
 - **Right-click a space or pane** in the sidebar: switch to it, unmount its folder (only a content root the plugin
   added), open, new tab, rename (space; shell label; agent name), close in Herdr after confirming (a pane, its tab
   when it's the only pane, a space, or a worktree space with its folder; forcing is offered when Herdr refuses because
@@ -53,6 +200,9 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   With the GitLab plugin, **Review with Agent…** is also in the context menu of a merge request's changes in the GitLab
   tool window: the agent reviews those files between the merge request's commits, without checking out its branch.
   Both ask for optional extra instructions first.
+
+  ![Extra instructions for a review, from a preset](docs/images/review-agent.png)
+
   **Send to GitLab as Drafts… / Send to GitHub (Gitea) as Pending Review…** (in the findings notification and list,
   opt-in per review): the findings go to the open merge/pull request of that branch (or of those commits), unpublished:
   draft notes on GitLab, one pending review on GitHub and Gitea. You submit them on the forge. The request whose head
@@ -68,6 +218,9 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   token. A server without an entry is detected: the review came from the GitLab tool window, a known host (gitlab.com,
   github.com, codeberg.org), a CLI signed in to it, or the server answers like one of the three. Unknown hosts get no
   entry.
+
+  ![A review server: type, sign-in, CLI path, token](docs/images/review-server.png)
+
   **Limit:** with a CLI signed in, an agent in a Herdr pane runs as the same user and can call it itself, so it could
   post or publish on its own. Only with a token (and the CLI signed out) does the token never reach the agents.
 - **Prompt library** (Settings | Tools | Herdr Cockpit | Prompts): a table of prompts, each with a name, a category and
@@ -75,11 +228,15 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   `general` in Send to Agent… and Hand Off to Agent…. A project can add its own under **Project Prompts**, stored in
   `.idea/herdr-cockpit-prompts.xml` to share through the repository. They go to your agents, so they're only offered
   in trusted projects and are marked "(project)". The earlier one-prompt-per-line setting is taken over once.
+
+  ![The prompt library and the agents offered for new tabs](docs/images/prompts.png)
 - **Send to Agent…** (right-click in the editor, or on files in the project view): the selection (or the caret's line)
   or the files go to an agent you pick (the file's space first), with what it should do.
 - **Review** (git line of a space, agent rows, right-click): every uncommitted change in that folder's repository as
   HEAD ↔ working tree diffs in one diff view (step through the files with the arrows). Uses the git CLI, so it also
   works for spaces that aren't mounted; only in trusted projects.
+
+  ![Review: uncommitted changes of a space](docs/images/review-diff.png)
 - **Usage** (top of the sidebar) for the agents running in Herdr right now, read from their local files once a minute
   while the sidebar is visible: Claude Code (5-hour/weekly plan limits once you allow the opt-in status line via
   "Show plan limits…", which never replaces an existing one; tokens of the current 5-hour session), Codex (live from
@@ -93,7 +250,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   (asks first), Settings, Copy Diagnostics) and a red badge on the tool window icon while an agent is blocked.
 - **Help** (`?` in the tool window's title bar, "Help" on the disconnected screens): "How to read the Herdr sidebar"
   in an editor tab, adapted from the VS Code extension's help page.
-- **From Herdr to the IDE** with the Herdr plugin in `herdr-plugin/` (`herdr plugin install tezmanian/herdr-cockpit-jetbrains/herdr-plugin`):
+- **From Herdr to the IDE** with the Herdr plugin in `herdr-plugin/` (see [Installation, step 4](#4-the-herdr-plugin-optional-from-herdr-to-the-ide)):
   "Open in JetBrains IDE" (the space and pane you're on), "Open selected file" (`path:line:col` and similar forms) and
   "Review changes". It calls the IDE's built-in server (`/api/herdr-cockpit/…`) with the port and a random per-run
   token from `~/.herdr-cockpit/jetbrains.json` (owner-only); requests with an `Origin` (web pages) are refused, and
@@ -101,8 +258,10 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
   one started last gets the links.
 - Optional: closing a pane's editor tab yourself also closes it in Herdr (setting "Closing a pane's tab yourself":
   never (default, only detaches) / ask / always). Tabs the plugin closes, and closing the project or IDE, only detach.
-- Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, a space per project, switching behaviour, space order, notifications, agents offered
-  for new tabs, closing tabs, Kiro monthly credits, saved prompts).
+- Settings: *Settings | Tools | Herdr Cockpit* (binary, socket, review servers, a space per project, switching
+  behaviour, space order, notifications, agents offered for new tabs, closing tabs, Kiro monthly credits, prompts).
+
+The screenshots show a demo session: two throwaway projects, with agent states set by hand.
 
 ## Issues
 
@@ -113,7 +272,7 @@ Bugs and ideas: [GitHub issues](https://github.com/tezmanian/herdr-cockpit-jetbr
 VS Code-only parts: the Cockpit window, terminal profiles (`+`/split in the terminal panel), the walkthrough. The
 sidebar's "Set up Cockpit window" link shows "not available in the JetBrains port".
 
-## Build and install
+## Development
 
 Needs JDK 21 (the Gradle wrapper downloads Gradle and the IntelliJ Platform).
 
@@ -122,8 +281,7 @@ Needs JDK 21 (the Gradle wrapper downloads Gradle and the IntelliJ Platform).
 ./gradlew test               # unit tests (fake Herdr socket server, real snapshot fixture)
 ```
 
-Install in PhpStorm: *Settings | Plugins | ⚙ | Install Plugin from Disk…* and pick the zip. Targets 2025.3+
-(build 253); depends only on `com.intellij.modules.platform`, so it also runs in IntelliJ IDEA, WebStorm, etc.
+Depends only on `com.intellij.modules.platform`, so it runs in every JetBrains IDE from build 253 on.
 
 ### CI
 
@@ -147,7 +305,10 @@ HERDR_SOCKET_PATH=~/.config/herdr/sessions/hcjb/herdr.sock herdr server stop
 If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your live session and wins over
 `HERDR_SESSION`: always set the socket explicitly, as above.
 
-## Layout (src/main/kotlin/io/github/tezmanian/herdrcockpit)
+For screenshots, a pane can pose as an agent without starting one:
+`herdr pane report-agent <pane> --source demo --agent claude --state blocked --message "…"`.
+
+### Layout (src/main/kotlin/io/github/tezmanian/herdrcockpit)
 
 | File | Role |
 |---|---|
