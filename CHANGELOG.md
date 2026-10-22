@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.18
+- Fixed stale text below a pane's screen (e.g. an old prompt line under Claude's input) after a resize, when Herdr's
+  pane was smaller than the tab.
+
 ## 0.1.17
 - Prompt library: the saved prompts are now a table (Name | Category | Text) with add, edit, remove and reorder; a
   prompt can span several lines. The dialogs offer them by name. Your existing prompts are taken over once.

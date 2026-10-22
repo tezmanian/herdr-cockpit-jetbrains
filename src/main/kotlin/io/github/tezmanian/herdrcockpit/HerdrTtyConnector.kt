@@ -126,6 +126,10 @@ class HerdrTtyConnector(
         val rec = runCatching { JsonParser.parseString(line.trim()).asJsonObject }.getOrNull() ?: return
         when (rec.get("type")?.asString) {
             "terminal.frame" -> rec.get("bytes")?.asString?.let {
+                // Only the first full frame clears the screen; the full ones after a resize paint just their own rows.
+                // When Herdr's pane is smaller than this tab (another client set its size), the rows below would keep
+                // stale text: clear before every full frame.
+                if (rec.get("full")?.asBoolean == true) emit(CLEAR_SCREEN)
                 emit(Base64.getDecoder().decode(it))
                 if (observing) emit(takenOverNote(size.rows, holderName).toByteArray(StandardCharsets.UTF_8))
             }
@@ -265,6 +269,8 @@ class HerdrTtyConnector(
 }
 
 fun isTakenOver(reason: String?): Boolean = reason != null && Regex("taken over", RegexOption.IGNORE_CASE).containsMatchIn(reason)
+
+private val CLEAR_SCREEN = "\u001b[H\u001b[2J".toByteArray(StandardCharsets.UTF_8)
 
 /** The bottom-row note while another client has the pane: drawn over the frame, cursor kept where it was. */
 fun takenOverNote(rows: Int, who: String? = null): String {
