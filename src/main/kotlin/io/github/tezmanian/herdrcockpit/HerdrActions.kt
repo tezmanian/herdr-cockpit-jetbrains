@@ -95,6 +95,8 @@ data class Created(val paneId: String, val tabId: String?, val workspaceId: Stri
 
 /** How long Herdr may take to report an agent ready (its default is 30s, max 300s). */
 private const val AGENT_START_TIMEOUT_MS = 60_000L
+/** On top of a wait's own timeout, for the reply to arrive. */
+private const val WAIT_SLACK_MS = 10_000L
 /** A pane Herdr just created isn't at its prompt yet ("agent_pane_busy"); retry this long. */
 private const val PANE_READY_TIMEOUT_MS = 15_000L
 
@@ -200,6 +202,41 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     fun renameAgent(paneId: String, name: String?) = call("agent.rename", "target" to paneId, "name" to name)
     /** Text + Enter as one submission; Herdr refuses an agent waiting at a question ("agent_blocked"). */
     fun promptAgent(paneId: String, text: String) = call("agent.prompt", "target" to paneId, "text" to text)
+
+    /**
+     * [promptAgent], then waits up to `timeoutMs` until the agent is in one of `until`; its status then. Herdr first
+     * waits a few seconds for the prompt to start work ("agent_prompt_stalled" if it doesn't). Blocks the thread.
+     */
+    fun promptAndWait(paneId: String, text: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus =
+        statusOf(client.request("agent.prompt", JsonObject().apply {
+            addProperty("target", paneId)
+            addProperty("text", text)
+            add("wait", waitParams(until, timeoutMs))
+        }, timeoutMs + WAIT_SLACK_MS))
+
+    /** Waits up to `timeoutMs` until the agent is in one of `until` (at once if it already is); its status then. */
+    fun waitAgent(paneId: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus =
+        statusOf(client.request("agent.wait", waitParams(until, timeoutMs).apply { addProperty("target", paneId) }, timeoutMs + WAIT_SLACK_MS))
+
+    private fun waitParams(until: Set<AgentStatus>, timeoutMs: Long) = JsonObject().apply {
+        add("until", com.google.gson.JsonArray().apply { until.forEach { add(it.name) } })
+        addProperty("timeout_ms", timeoutMs)
+    }
+
+    private fun statusOf(result: JsonObject) = AgentStatus.of(result.getAsJsonObject("agent")?.get("agent_status")?.asString)
+
+    /** Key presses ("enter", "esc", "up", "1") to the agent's own UI; refused when that agent no longer holds the pane. */
+    fun sendKeys(paneId: String, keys: List<String>) {
+        client.request("agent.send_keys", JsonObject().apply {
+            addProperty("target", paneId)
+            add("keys", com.google.gson.JsonArray().apply { keys.forEach { add(it) } })
+        }, 5000)
+    }
+
+    /** What the agent's screen shows now (plain text), e.g. the dialog it is waiting at. */
+    fun readAgent(paneId: String): String =
+        client.request("agent.read", JsonObject().apply { addProperty("target", paneId); addProperty("source", "visible") }, 5000)
+            .getAsJsonObject("read")?.get("text")?.asString ?: ""
 
     fun processInfo(paneId: String): ProcInfo? =
         parseProcInfo(client.request("pane.process_info", JsonObject().apply { addProperty("pane_id", paneId) }, 5000))

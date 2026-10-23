@@ -287,7 +287,6 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             }
             val before = lastStatus[a.id]
             if (!firstLoad && before != null && a.status != null && before != a.status) notifyTransition(sp, a)
-            if (before == AgentStatus.working && a.status != AgentStatus.working) reviewFlow.agentSettled(sp, a)
             lastStatus[a.id] = a.status
         }
         lastStatus.keys.retainAll(seen)
@@ -365,6 +364,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
 
     private fun notifyTransition(space: Space, agent: Pane) {
         val st = agent.status ?: return
+        if (reviewFlow.isReviewing(agent.id)) return // the review tells
         if (st == AgentStatus.blocked && !settings.notifyBlocked) return
         if (st == AgentStatus.done && !settings.notifyDone) return
         if (st != AgentStatus.blocked && st != AgentStatus.done) return
@@ -374,6 +374,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             if (project.isDisposed) return@invokeLater
             NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
                 .createNotification(text, if (st == AgentStatus.blocked) NotificationType.WARNING else NotificationType.INFORMATION)
+                .apply { if (st == AgentStatus.blocked) addAction(NotificationAction.createSimpleExpiring("Answer…") { answerAgent(project, this@HerdrService.actions, name, agent.id) }) }
                 .addAction(NotificationAction.createSimpleExpiring("Show") { model?.find(agent.id)?.let { (s, p) -> attachPane(s, p) } })
                 .apply { if (st == AgentStatus.done) addAction(NotificationAction.createSimpleExpiring("Hand Off…") { model?.find(agent.id)?.let { (s, p) -> manage.handOff(s, p) } }) }
                 .notify(project)
@@ -574,6 +575,10 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         }
     }
 
+    override fun showPane(paneId: String) {
+        model?.find(paneId)?.let { (s, p) -> attachPane(s, p) }
+    }
+
     fun attachPane(space: Space, pane: Pane) {
         if (files[pane.id]?.connector == null && settings.mountOnSwitch && !isMounted(space) && space.cwd != null) switchTo(space, autoAttach = false)
         openTab(space, pane, focus = true)
@@ -754,6 +759,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
 
     override fun dispose() {
         sub?.dispose()
+        client.dispose()
         loop.shutdownNow()
         activityExec.shutdownNow()
         usageExec.shutdownNow()

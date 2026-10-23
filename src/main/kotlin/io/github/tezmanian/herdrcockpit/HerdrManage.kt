@@ -92,6 +92,8 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
         if (!connected()) return
         val items = buildList {
             if (pane != null) add(Item("Open", AllIcons.Actions.MenuOpen) { service.attachPane(space, pane) })
+            if (pane?.isAgent == true && pane.status == AgentStatus.blocked)
+                add(Item("Answer…", AllIcons.General.QuestionDialog) { answerAgent(project, actions, editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.id) })
             else {
                 add(Item("Switch to Space", AllIcons.Actions.Forward) { service.switchTo(space) })
                 if (service.isOurMount(space)) add(Item("Unmount Folder", AllIcons.Actions.Cancel) { service.unmount(space) })
@@ -162,7 +164,7 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
             actions.promptAgent(paneId, text)
         } catch (e: HerdrError) {
             if (e.code != "agent_blocked") throw e
-            notify("$to is waiting for an answer; nothing was sent.", NotificationType.WARNING)
+            notify("$to is waiting for an answer; nothing was sent.", NotificationType.WARNING, "Answer…" to { answerAgent(project, actions, to, paneId) })
         }
     }
 

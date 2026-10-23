@@ -70,11 +70,14 @@ private fun errorOf(msg: JsonObject): HerdrError? {
 class HerdrClient(private val socketPath: () -> String) {
     // Closes sockets whose request ran out of time (blocking channels have no read timeout).
     private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-timeouts").apply { isDaemon = true } }
+    // Requests in flight, so dispose() can end long waits (agent.wait) instead of leaving them to their timeout.
+    private val inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet<SocketChannel>()
 
     /** One request on a short-lived connection. Blocks the calling thread; never call it on the EDT. */
     fun request(method: String, params: JsonObject = JsonObject(), timeoutMs: Long = 5000): JsonObject {
         val id = nextId("req")
         val ch = open(socketPath())
+        inFlight += ch
         val timedOut = AtomicBoolean(false)
         val guard = timer.schedule({ timedOut.set(true); runCatching { ch.close() } }, timeoutMs, TimeUnit.MILLISECONDS)
         try {
@@ -94,8 +97,15 @@ class HerdrClient(private val socketPath: () -> String) {
             throw e
         } finally {
             guard.cancel(false)
+            inFlight -= ch
             runCatching { ch.close() }
         }
+    }
+
+    /** Ends the requests in flight (they fail) and the timeout thread. Subscriptions are disposed on their own. */
+    fun dispose() {
+        timer.shutdownNow()
+        inFlight.forEach { runCatching { it.close() } }
     }
 
     /**

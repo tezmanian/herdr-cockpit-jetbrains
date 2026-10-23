@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.26
+- Agent reviews are followed through Herdr (`agent.prompt` with a wait, then `agent.wait`) instead of by watching
+  snapshots. When the agent stops at a question during a review, a notification offers Answer… and Show; when it
+  finishes without writing the findings file, a notification says so instead of the review staying open forever.
+  The agent's own "needs you" / "is done" notifications are left out while it reviews.
+- **Answer…** for a blocked agent (right-click menu, its "needs you" notification, "is waiting for an answer"): shows
+  the agent's screen with keys to answer its dialog (↑ ↓ 1 2 3 Enter Esc), sent with `agent.send_keys` (only to that
+  agent), and reads the screen again after each key.
+- Closing a project ends Herdr requests still in flight and the request timeout thread.
+
 ## 0.1.25
 - Fix: a NullPointerException at startup ("Cannot invoke kotlin.Lazy.getValue()" in HerdrService.getClaims) meant
   stale takeover claims in ~/.herdr-cockpit/claims weren't pruned. The startup task could run before the field it

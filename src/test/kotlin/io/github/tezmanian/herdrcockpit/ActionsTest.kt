@@ -42,7 +42,8 @@ class ActionsTest {
         }.apply { isDaemon = true }.start()
     }
 
-    private val actions = HerdrActions(HerdrClient { socket.toString() }) {}
+    private val client = HerdrClient { socket.toString() }
+    private val actions = HerdrActions(client) {}
     private fun params(i: Int) = requests[i].getAsJsonObject("params")
     private fun JsonObject.str(k: String) = get(k)?.asString
 
@@ -218,5 +219,60 @@ class ActionsTest {
             SavedPrompt("Focus on tests: missing cases, edge…", "review", "Focus on tests: missing cases, edge cases and the error paths"),
         ), promptsFromLines(setting))
         assertEquals(emptyList<SavedPrompt>(), promptsFromLines(null))
+    }
+
+    @Test
+    fun promptAndWaitSendsTheWaitAndReadsTheStatus() {
+        serve { _, _ -> """{"type":"agent_prompted","agent":{"pane_id":"w1:p2","agent_status":"blocked"}}""" }
+        val st = actions.promptAndWait("w1:p2", "review", setOf(AgentStatus.idle, AgentStatus.blocked), 60_000)
+        assertEquals(AgentStatus.blocked, st)
+        assertEquals("agent.prompt", requests[0].str("method"))
+        assertEquals("review", params(0).str("text"))
+        val wait = params(0).getAsJsonObject("wait")
+        assertEquals(60_000L, wait.get("timeout_ms").asLong)
+        assertEquals(listOf("idle", "blocked"), wait.getAsJsonArray("until").map { it.asString })
+    }
+
+    @Test
+    fun waitAgentSendsTargetAndStates() {
+        serve { _, _ -> """{"type":"agent_info","agent":{"pane_id":"w1:p2","agent_status":"done"}}""" }
+        assertEquals(AgentStatus.done, actions.waitAgent("w1:p2", setOf(AgentStatus.done), 1000))
+        assertEquals("agent.wait", requests[0].str("method"))
+        assertEquals("w1:p2", params(0).str("target"))
+        assertFalse(params(0).has("focus"))
+    }
+
+    @Test
+    fun sendKeysAndRead() {
+        serve { m, _ -> if (m == "agent.read") """{"type":"pane_read","read":{"text":"Allow?\n1. Yes\n2. No"}}""" else """{"type":"ok"}""" }
+        actions.sendKeys("w1:p2", listOf("down", "enter"))
+        assertEquals("agent.send_keys", requests[0].str("method"))
+        assertEquals(listOf("down", "enter"), params(0).getAsJsonArray("keys").map { it.asString })
+        assertEquals("Allow?\n1. Yes\n2. No", actions.readAgent("w1:p2"))
+        assertEquals("visible", params(1).str("source"))
+    }
+
+    @Test
+    fun blockedAgentRefusesKeysForAnotherOccupant() {
+        serve { _, _ -> "!agent_not_running" }
+        try {
+            actions.sendKeys("w1:p2", listOf("enter"))
+            fail("expected agent_not_running")
+        } catch (e: HerdrError) {
+            assertEquals("agent_not_running", e.code)
+        }
+    }
+
+    @Test
+    fun disposeEndsAWaitInFlight() {
+        serve { _, _ -> Thread.sleep(30_000); """{"type":"ok"}""" }
+        val started = System.currentTimeMillis()
+        Thread { Thread.sleep(300); client.dispose() }.start()
+        try {
+            actions.waitAgent("w1:p2", setOf(AgentStatus.idle), 60_000)
+            fail("expected the wait to fail")
+        } catch (_: Exception) {
+        }
+        assertTrue(System.currentTimeMillis() - started < 10_000)
     }
 }

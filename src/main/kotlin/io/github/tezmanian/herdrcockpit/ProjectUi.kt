@@ -2,6 +2,7 @@
 package io.github.tezmanian.herdrcockpit
 
 import com.intellij.ide.util.PropertiesComponent
+import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -23,15 +24,17 @@ import com.intellij.ui.dsl.builder.panel
 import java.awt.MouseInfo
 import javax.swing.Icon
 
-/** A "Herdr Cockpit" balloon in `project`, from any thread. */
-fun herdrNotify(project: Project, html: String, type: NotificationType) = ApplicationManager.getApplication().invokeLater {
-    if (!project.isDisposed) NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit").createNotification(html, type).notify(project)
+/** A "Herdr Cockpit" balloon in `project`, from any thread, with `actions` (label, what it does; each closes it). */
+fun herdrNotify(project: Project, html: String, type: NotificationType, vararg actions: Pair<String, () -> Unit>) = ApplicationManager.getApplication().invokeLater {
+    if (!project.isDisposed) NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit").createNotification(html, type)
+        .apply { actions.forEach { (label, run) -> addAction(NotificationAction.createSimpleExpiring(label) { run() }) } }
+        .notify(project)
 }
 
 abstract class ProjectUi(protected val project: Project, private val log: (String) -> Unit) {
     protected class Item(val text: String, val icon: Icon?, val separator: String? = null, val run: () -> Unit)
 
-    protected fun notify(html: String, type: NotificationType) = herdrNotify(project, html, type)
+    protected fun notify(html: String, type: NotificationType, vararg actions: Pair<String, () -> Unit>) = herdrNotify(project, html, type, *actions)
 
     protected fun choose(title: String?, items: List<Item>, atMouse: Boolean = false) {
         val step = object : BaseListPopupStep<Item>(title, items) {

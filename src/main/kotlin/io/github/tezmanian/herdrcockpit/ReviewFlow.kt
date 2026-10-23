@@ -31,13 +31,19 @@ import com.intellij.ui.dsl.builder.panel
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
-/** What a review needs from HerdrService: the socket calls, the current snapshot, the log. */
+/** What a review needs from HerdrService: the socket calls, the current snapshot, opening a pane, the log. */
 interface ReviewHost {
     val actions: HerdrActions
     fun isConnected(): Boolean
     fun currentModel(): Model?
+    fun showPane(paneId: String)
     fun log(line: String)
 }
+
+/** How long an agent review is followed before it's given up on. */
+private const val REVIEW_TIMEOUT_MS = 2 * 60 * 60 * 1000L
+/** The states that end a wait: finished, or waiting for you. */
+private val SETTLED = setOf(AgentStatus.idle, AgentStatus.done, AgentStatus.blocked)
 
 class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(project, host::log) {
     private val actions get() = host.actions
@@ -58,7 +64,10 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
 
     /** A review an agent owes: where it writes, and the branch (if any) and commit it reviews, to find the merge request. `forge` is known when it was started from that forge's tool window. */
     private class PendingReview(val root: String, val out: File, val since: Long, val branch: String?, val head: String?, val forge: ForgeProvider? = null)
-    private val reviews = ConcurrentHashMap<String, PendingReview>()
+    /** Panes whose agent is doing a review; its "needs you" and "done" notifications come from the review. */
+    private val watched = ConcurrentHashMap.newKeySet<String>()
+
+    fun isReviewing(paneId: String) = paneId in watched
     /** The forge found per host; unknown ones are asked again next time. */
     private val found = ConcurrentHashMap<String, ForgeProvider>()
 
@@ -117,37 +126,65 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
         promptDialog("Review with $name", "Anything $name should look at in particular? (optional)", "review", "", null,
             reviewTemplates(project, templateCategory, default), templateCategory)
 
-    /** Sends the prompt `text` builds (in the background: it may run git). */
+    /** Sends the prompt `text` builds (in the background: it may run git), then follows the agent on its own thread. */
     private fun startReview(name: String, paneId: String, review: PendingReview, text: () -> String) = run("Review with $name") {
-        val prompt = text()
-        review.out.parentFile.mkdirs()
-        review.out.delete()
-        reviews[paneId] = review
+        if (!watched.add(paneId)) return@run notify("$name is already doing a review.", NotificationType.INFORMATION)
         try {
-            actions.promptAgent(paneId, prompt)
-        } catch (e: HerdrError) {
-            reviews.remove(paneId)
-            if (e.code != "agent_blocked") throw e
-            notify("$name is waiting for an answer; nothing was sent.", NotificationType.WARNING)
+            val prompt = text()
+            review.out.parentFile.mkdirs()
+            review.out.delete()
+            ApplicationManager.getApplication().executeOnPooledThread {
+                try { follow(name, paneId, review, prompt) } finally { watched.remove(paneId) }
+            }
+        } catch (e: Exception) {
+            watched.remove(paneId)
+            throw e
         }
     }
 
-    /** An agent stopped working: if it owes a review and has written the file, offer its findings. */
-    fun agentSettled(space: Space, pane: Pane) {
-        val r = reviews[pane.id] ?: return
-        if (!r.out.isFile || r.out.lastModified() < r.since) return
-        reviews.remove(pane.id)
-        val name = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
+    private fun answerAction(name: String, paneId: String) = "Answer…" to { answerAgent(project, actions, name, paneId) }
+    private fun showAction(paneId: String) = "Show" to { host.showPane(paneId) }
+
+    /**
+     * Prompts the agent and follows it until it settles: its findings when it wrote the file, a note when it didn't,
+     * and a notification to answer whenever it waits at a question. Blocks a pooled thread; closing the project ends
+     * the wait (the socket closes).
+     */
+    private fun follow(name: String, paneId: String, r: PendingReview, prompt: String) {
+        val deadline = System.currentTimeMillis() + REVIEW_TIMEOUT_MS
+        fun left() = (deadline - System.currentTimeMillis()).coerceAtLeast(1)
+        try {
+            var status = actions.promptAndWait(paneId, prompt, SETTLED, left())
+            while (status == AgentStatus.blocked) {
+                notify("$name needs an answer to go on with the review.", NotificationType.WARNING, answerAction(name, paneId), showAction(paneId))
+                // Answered (here or in Herdr), then on to the next stop.
+                actions.waitAgent(paneId, SETTLED - AgentStatus.blocked + AgentStatus.working, left())
+                status = actions.waitAgent(paneId, SETTLED, left())
+            }
+            settled(name, paneId, r)
+        } catch (e: HerdrError) {
+            when (e.code) {
+                "agent_blocked" -> notify("$name is waiting for an answer; the review wasn't sent.", NotificationType.WARNING, answerAction(name, paneId), showAction(paneId))
+                "agent_not_found", "agent_not_running" -> notify("$name is no longer running in that pane; the review ended.", NotificationType.WARNING)
+                "timeout" -> notify("$name hasn't finished the review in ${REVIEW_TIMEOUT_MS / 3_600_000} hours; it's no longer followed.", NotificationType.WARNING, showAction(paneId))
+                else -> notify("$name's review: ${e.message}", NotificationType.WARNING)
+            }
+        } catch (e: Exception) {
+            host.log("review by $name: ${e.message}") // the socket closed: the project is closing or Herdr went away
+        }
+    }
+
+    /** The agent finished: offer its findings, or say why there are none. Pooled thread. */
+    private fun settled(name: String, paneId: String, r: PendingReview) {
+        if (!r.out.isFile || r.out.lastModified() < r.since)
+            return notify("$name finished without writing the review to ${r.out}.", NotificationType.WARNING, showAction(paneId))
         val findings = parseReview(r.out.readText(), File(r.root))
             ?: return notify("$name's review in ${r.out} isn't a JSON array of findings.", NotificationType.WARNING)
         if (findings.isEmpty()) return notify("$name's review: no findings.", NotificationType.INFORMATION)
         val remote = gitRemoteUrl(r.root)?.let(::remoteRepo)
-        // Detection may ask CLIs and the server: off the snapshot thread.
-        ApplicationManager.getApplication().executeOnPooledThread {
-            val target = remote?.let(::target)
-            if (remote != null) host.log("review: ${remote.host} is ${target?.forge?.title ?: "an unknown kind of server"}")
-            offerFindings(name, r, findings, target?.takeIf { r.forge == null || it.forge.title == r.forge.title })
-        }
+        val target = remote?.let(::target)
+        if (remote != null) host.log("review: ${remote.host} is ${target?.forge?.title ?: "an unknown kind of server"}")
+        offerFindings(name, r, findings, target?.takeIf { r.forge == null || it.forge.title == r.forge.title })
     }
 
     /** Where a review can go: the forge, the repository on it (a subpath install's prefix taken off) and your server entry. */

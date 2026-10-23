@@ -179,6 +179,9 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
   window that follows Herdr leaves a pane another window holds where it is. Closing a tab only detaches; the program keeps running in Herdr.
 - Live updates via `events.subscribe` (re-snapshot on every event, 5 s safety poll), notifications when an agent is
   blocked or done, follow mode (Herdr's focus moves → the IDE follows, in projects you switched from the IDE).
+- **Answer…** (a blocked agent's right-click menu, and its "needs you" notification): the agent's screen, e.g. the
+  permission or question dialog it waits at, with keys to answer it (↑ ↓, 1–3, Enter, Esc). They go to that agent
+  only (`agent.send_keys`); after each key the screen is read again.
 - **New space** (`+` next to "Spaces"): in one of the window's projects (attached ones too), a folder you pick, or on a new git worktree (and branch) of an existing
   space's repository. **New tab** (in every space): a shell, a named shell, or an agent (your favorites first, the
   rest under "More agents…"). The new pane opens as an editor tab right away; an agent is started in it in the
@@ -196,6 +199,8 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
 - **Review Branch with Agent…** (right-click an agent): the agent reviews its folder's branch against a branch you
   pick (`git diff <target>...HEAD`) and writes its findings as JSON to `~/.herdr-cockpit/reviews/`. Nothing is posted
   to GitLab or anywhere else. When it's done, a notification lists the findings; each opens the file at its line.
+  The plugin follows the agent through Herdr (`agent.prompt` with a wait, then `agent.wait`): when it stops at a
+  question, a notification offers **Answer…**; when it finishes without writing the file, it says so.
   Findings pointing outside the repository are dropped. Only in trusted projects.
   With the GitLab plugin, **Review with Agent…** is also in the context menu of a merge request's changes in the GitLab
   tool window: the agent reviews those files between the merge request's commits, without checking out its branch.
