@@ -58,8 +58,10 @@ class HerdrSettingsState : BaseState() {
     var promptsMigrated by property(false)
     /** Before the library: one "category: text" per line. Only read to fill the library once. */
     var prompts by string(LEGACY_PROMPTS)
-    /** Whether the library's untouched first presets were replaced by DEFAULT_PROMPTS and the review templates added (once). */
+    /** Whether the library's untouched first presets were replaced by DEFAULT_PROMPTS (once). */
     var presetsUpgraded by property(false)
+    /** Whether DEFAULT_TEMPLATES were added to the library (once; apart from presetsUpgraded, which an early 0.1.23 set without them). */
+    var templatesAdded by property(false)
     /** Review servers (GitLab, GitHub, Gitea) and how to sign in; tokens are in the password safe. */
     var servers by list<ServerEntry>()
     /** Before 0.1.21: global paths to the forge CLIs, now per server. Only read to move them there once. */
@@ -84,8 +86,12 @@ class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSe
                 s.promptsMigrated = true
             }
             if (!s.presetsUpgraded) {
-                s.library = (upgradePresets(s.library.toPrompts()) + DEFAULT_TEMPLATES).toEntries()
+                s.library = upgradePresets(s.library.toPrompts()).toEntries()
                 s.presetsUpgraded = true
+            }
+            if (!s.templatesAdded) {
+                s.library = (s.library.toPrompts() + DEFAULT_TEMPLATES).toEntries()
+                s.templatesAdded = true
             }
             return s.library.toPrompts()
         }
