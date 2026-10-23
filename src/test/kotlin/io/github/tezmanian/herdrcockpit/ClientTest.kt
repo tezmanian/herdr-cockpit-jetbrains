@@ -113,5 +113,16 @@ class ClientTest {
         assertEquals("/c/herdr/herdr.sock", resolveSocketPath(null, mapOf("XDG_CONFIG_HOME" to "/c")))
         assertEquals("/o.sock", resolveSocketPath("/o.sock", mapOf("HERDR_SOCKET_PATH" to "/x/h.sock")))
         assertEquals("demo", sessionOfSocket("/c/herdr/sessions/demo/herdr.sock"))
+        assertEquals(java.nio.file.Paths.get("/a/herdr/sessions/demo/herdr.sock").toString(),
+            resolveSocketPath(null, mapOf("APPDATA" to "/a", "XDG_CONFIG_HOME" to "/c", "HERDR_SESSION" to "demo"), windows = true))
+    }
+
+    @Test
+    fun windowsPipeName() {
+        val logical = "C:\\Users\\me\\AppData\\Roaming\\herdr\\herdr.sock"
+        val pipe = "\\\\.\\pipe\\$logical"
+        assertEquals(pipe, pipeName(logical))
+        assertEquals(pipe, pipeName("C:/Users/me/AppData/Roaming/herdr//herdr.sock"))
+        assertEquals(pipe, pipeName(pipe))
     }
 }

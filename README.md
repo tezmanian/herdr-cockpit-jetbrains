@@ -17,7 +17,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 | A JetBrains IDE | 2025.3 or newer (build 253+): PhpStorm, IntelliJ IDEA, WebStorm, PyCharm, GoLand, … | the plugin |
 | [Herdr](https://herdr.dev) | 0.9.1 – 0.9.3 (socket protocol 22) | everything |
 | git | any recent | the git line, Review, worktrees |
-| macOS or Linux | | the plugin talks to Herdr's Unix socket; see [Windows](#windows) |
+| macOS, Linux or Windows | | the plugin talks to Herdr's Unix socket (on Windows its named pipe); see [Windows](#windows) |
 | `curl` or `wget` | | optional: the Herdr plugin (links from Herdr to the IDE) |
 | `glab`, `gh`, `tea` | | optional: sending reviews to GitLab, GitHub, Gitea with the CLI's login |
 | Coding agents | Claude Code, Codex, Kiro, Cursor, … | optional: whatever you want to run in Herdr |
@@ -132,10 +132,13 @@ be running. With two JetBrains IDEs open, the one started last gets the links.
 
 ### Windows
 
-Not supported natively yet. Herdr runs on Windows, but there its socket is a named pipe, while this plugin speaks to
-a Unix domain socket; the Herdr plugin in `herdr-plugin/` is a POSIX shell script.
+Untested. On Windows, Herdr serves a named pipe named after its socket path, and the plugin connects to that pipe.
+The default path is `%APPDATA%\herdr\herdr.sock` (`…\sessions\<name>\herdr.sock` for a named session). In the
+settings, set the socket as that path, not with a `\\.\pipe\` prefix, and the herdr binary as the full path to
+`herdr.exe` if it isn't on PATH. Not on Windows: the Herdr plugin in `herdr-plugin/` (a POSIX shell script, so no
+links from Herdr to the IDE). Reports are welcome in the [issues](https://github.com/tezmanian/herdr-cockpit-jetbrains/issues).
 
-What should work is **WSL 2** with everything inside the Linux side: install Herdr there (the Linux steps above) and
+What should also work is **WSL 2** with everything inside the Linux side: install Herdr there (the Linux steps above) and
 run the JetBrains IDE inside WSL too (WSLg shows its window on the Windows desktop), so both see the same socket. An
 IDE running on Windows can't reach a socket inside WSL. This setup isn't tested yet; reports are welcome in the
 [issues](https://github.com/tezmanian/herdr-cockpit-jetbrains/issues).

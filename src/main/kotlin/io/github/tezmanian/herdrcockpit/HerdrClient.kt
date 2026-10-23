@@ -1,4 +1,4 @@
-// Herdr socket API client. Protocol: newline-delimited JSON over a Unix socket. One request per line,
+// Herdr socket API client. Protocol: newline-delimited JSON over a Unix socket (on Windows a named pipe). One request per line,
 // responses echo the request id. events.subscribe keeps the connection open.
 // No IntelliJ imports, so it can be tested standalone (see HerdrClientTest).
 package io.github.tezmanian.herdrcockpit
@@ -6,11 +6,19 @@ package io.github.tezmanian.herdrcockpit
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.io.BufferedReader
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.InputStream
 import java.io.InputStreamReader
+import java.io.OutputStream
+import java.io.RandomAccessFile
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.Channels
 import java.nio.channels.SocketChannel
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeoutException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -28,19 +36,52 @@ fun interface Subscription {
 private fun expandHome(p: String): String =
     if (p.startsWith("~")) System.getProperty("user.home") + p.substring(1) else p
 
-/** Mirrors Herdr's resolution order: HERDR_SOCKET_PATH, HERDR_SESSION, default. */
-fun resolveSocketPath(override: String?, env: Map<String, String> = System.getenv()): String {
+val IS_WINDOWS = System.getProperty("os.name").lowercase().startsWith("windows")
+
+/** Mirrors Herdr's resolution order: HERDR_SOCKET_PATH, HERDR_SESSION, default (on Windows under %APPDATA%). */
+fun resolveSocketPath(override: String?, env: Map<String, String> = System.getenv(), windows: Boolean = IS_WINDOWS): String {
     if (!override.isNullOrBlank()) return expandHome(override)
     env["HERDR_SOCKET_PATH"]?.takeIf { it.isNotEmpty() }?.let { return it }
-    val base = Paths.get(env["XDG_CONFIG_HOME"]?.takeIf { it.isNotEmpty() } ?: (System.getProperty("user.home") + "/.config"), "herdr")
+    val home = System.getProperty("user.home")
+    val config = if (windows) env["APPDATA"]?.takeIf { it.isNotEmpty() } ?: "$home/AppData/Roaming"
+        else env["XDG_CONFIG_HOME"]?.takeIf { it.isNotEmpty() } ?: "$home/.config"
+    val base = Paths.get(config, "herdr")
     val session = env["HERDR_SESSION"]?.takeIf { it.isNotEmpty() }
     return (if (session != null) base.resolve("sessions").resolve(session).resolve("herdr.sock") else base.resolve("herdr.sock")).toString()
 }
 
+/**
+ * Windows Herdr serves a named pipe named after the full logical socket path (as upstream's client connects to it);
+ * the CLI and HERDR_SOCKET_PATH keep the path itself.
+ */
+fun pipeName(socket: String): String =
+    if (socket.startsWith("\\\\.\\pipe\\")) socket else "\\\\.\\pipe\\" + socket.replace('/', '\\').replace(Regex("\\\\{2,}"), "\\\\")
+
 private val seq = AtomicLong()
 private fun nextId(kind: String) = "hc_${kind}_${ProcessHandle.current().pid()}_${seq.incrementAndGet()}"
 
-private fun open(socket: String): SocketChannel {
+/** One connection to Herdr. close() ends a blocked read (on a pipe: see [open]). */
+private class Conn(private val input: InputStream, private val output: OutputStream, private val closer: () -> Unit) : java.io.Closeable {
+    fun send(obj: JsonObject) {
+        output.write((obj.toString() + "\n").toByteArray(StandardCharsets.UTF_8))
+        output.flush()
+    }
+
+    fun lines(): BufferedReader = BufferedReader(InputStreamReader(input, StandardCharsets.UTF_8))
+
+    override fun close() = closer()
+}
+
+private fun open(socket: String): Conn {
+    if (IS_WINDOWS) {
+        val pipe = RandomAccessFile(pipeName(socket), "rw")
+        // shortcut: Java can't cancel a read on a synchronous pipe, and closing it waits for that read; so close on a side
+        // thread, and a timed-out read ends only when Herdr answers or exits (requests time out anyway, see request()).
+        // Upgrade to overlapped I/O if java.nio ever accepts these pipe names (they contain the path's ':').
+        return Conn(FileInputStream(pipe.fd), FileOutputStream(pipe.fd)) {
+            Thread({ runCatching { pipe.close() } }, "herdr-pipe-close").apply { isDaemon = true }.start()
+        }
+    }
     val ch = SocketChannel.open(StandardProtocolFamily.UNIX)
     try {
         ch.connect(UnixDomainSocketAddress.of(Path.of(socket)))
@@ -48,16 +89,8 @@ private fun open(socket: String): SocketChannel {
         ch.close()
         throw e
     }
-    return ch
+    return Conn(Channels.newInputStream(ch), Channels.newOutputStream(ch)) { ch.close() }
 }
-
-private fun SocketChannel.send(obj: JsonObject) {
-    val buf = java.nio.ByteBuffer.wrap((obj.toString() + "\n").toByteArray(StandardCharsets.UTF_8))
-    while (buf.hasRemaining()) write(buf)
-}
-
-private fun SocketChannel.lines(): BufferedReader =
-    BufferedReader(InputStreamReader(Channels.newInputStream(this), StandardCharsets.UTF_8))
 
 private fun parseLine(line: String): JsonObject? =
     runCatching { JsonParser.parseString(line).asJsonObject }.getOrNull()
@@ -71,10 +104,24 @@ class HerdrClient(private val socketPath: () -> String) {
     // Closes sockets whose request ran out of time (blocking channels have no read timeout).
     private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-timeouts").apply { isDaemon = true } }
     // Requests in flight, so dispose() can end long waits (agent.wait) instead of leaving them to their timeout.
-    private val inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet<SocketChannel>()
+    private val inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet<Conn>()
+    // On Windows a request runs here, so its caller gets the timeout even while a pipe read can't be cut off.
+    private val pipeWorkers by lazy { Executors.newCachedThreadPool { r -> Thread(r, "herdr-pipe").apply { isDaemon = true } } }
 
     /** One request on a short-lived connection. Blocks the calling thread; never call it on the EDT. */
     fun request(method: String, params: JsonObject = JsonObject(), timeoutMs: Long = 5000): JsonObject {
+        if (!IS_WINDOWS) return exchange(method, params, timeoutMs)
+        val f = pipeWorkers.submit(Callable { exchange(method, params, timeoutMs) })
+        try {
+            return f.get(timeoutMs + 1000, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            throw HerdrError("timeout", "herdr $method timed out")
+        } catch (e: ExecutionException) {
+            throw (e.cause as? Exception) ?: e
+        }
+    }
+
+    private fun exchange(method: String, params: JsonObject, timeoutMs: Long): JsonObject {
         val id = nextId("req")
         val ch = open(socketPath())
         inFlight += ch
@@ -117,7 +164,7 @@ class HerdrClient(private val socketPath: () -> String) {
         val id = nextId("sub")
         val disposed = AtomicBoolean(false)
         // Closed from the caller's thread by dispose().
-        val channel = java.util.concurrent.atomic.AtomicReference<SocketChannel?>()
+        val channel = java.util.concurrent.atomic.AtomicReference<Conn?>()
         val thread = Thread({
             var err: Exception? = null
             try {

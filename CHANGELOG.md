@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.36
+- Windows (untested): the plugin connects to Herdr's named pipe, which Herdr names after its socket path, as the VS
+  Code extension does. The default socket path there is `%APPDATA%\herdr\herdr.sock`.
+
 ## 0.1.35
 - Settings | Tools | Herdr Cockpit | Agent integrations: Herdr's agent integrations with their state (installed,
   outdated) and whether the agent was found, with Install / Update and Uninstall. They change the agent's own
