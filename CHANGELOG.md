@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.27
+- Fix: pasting a longer text into a pane tab could arrive cut off or garbled (e.g. Claude Code lost its beginning).
+  Herdr's frames don't carry the program's modes, so the tab never used bracketed paste: the paste went out as typed
+  text with Enter for every line break. Pastes are now always sent marked as a paste, as in the VS Code extension.
+
 ## 0.1.26
 - Agent reviews are followed through Herdr (`agent.prompt` with a wait, then `agent.wait`) instead of by watching
   snapshots. When the agent stops at a question during a review, a notification offers Answer… and Show; when it

@@ -163,6 +163,15 @@ class HerdrTerminalPanel(
     var cursor: () -> Pair<Int, Int>? = { null }
     var marks: () -> List<Mark> = { emptyList() }
 
+    init { setBracketedPasteMode(true) }
+
+    /**
+     * Always on: Herdr's frames don't pass the program's modes on, so JediTerm would never learn that the agent or shell
+     * asked for bracketed paste. Without it a paste goes out as typed text with Enter for every line break, and agents
+     * mangle long ones (upstream turns it on for the same reason).
+     */
+    override fun setBracketedPasteMode(enabled: Boolean) = super.setBracketedPasteMode(true)
+
     private var pressed = false
     private var swallowTyped = false
     private var extending = false
