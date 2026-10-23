@@ -13,6 +13,10 @@ import java.nio.file.Files
 class ForgeTest {
     private val dir = Files.createTempDirectory("hc").toFile()
     private val env = mapOf("PATH" to "/usr/bin:/bin")
+    private val lab = GitLabForge()
+    private val hub = GitHubForge()
+    private val gitea = GiteaForge()
+    private val forges = listOf(lab, gitea, hub)
 
     @After
     fun cleanup() {
@@ -21,10 +25,10 @@ class ForgeTest {
 
     @Test
     fun knownHosts() {
-        assertEquals(Forge.GitHub, knownForge("GitHub.com"))
-        assertEquals(Forge.GitLab, knownForge("gitlab.com"))
-        assertEquals(Forge.Gitea, knownForge("codeberg.org"))
-        assertNull(knownForge("git.example.com"))
+        assertEquals(hub, knownForge("GitHub.com", forges))
+        assertEquals(lab, knownForge("gitlab.com", forges))
+        assertEquals(gitea, knownForge("codeberg.org", forges))
+        assertNull(knownForge("git.example.com", forges))
     }
 
     /** A fake CLI that succeeds for `auth status --hostname <host>` and prints `stdout` otherwise. */
@@ -36,15 +40,16 @@ class ForgeTest {
     @Test
     fun signedInCliTellsTheForge() {
         val none = File(dir, "missing").path
-        assertEquals(Forge.GitLab, cliForge("git.example.com", ForgeClis(cli("glab", "git.example.com"), none, none), env))
-        assertEquals(Forge.GitHub, cliForge("ghe.example.com", ForgeClis(none, cli("gh", "ghe.example.com"), none), env))
+        fun clis(glab: String, gh: String, tea: String) = mapOf("glab" to glab, "gh" to gh, "tea" to tea)
+        assertEquals(lab, cliForge("git.example.com", clis(cli("glab", "git.example.com"), none, none), forges, env))
+        assertEquals(hub, cliForge("ghe.example.com", clis(none, cli("gh", "ghe.example.com"), none), forges, env))
         val tea = cli("tea", null, """[{"name": "work", "url": "https://Git.Example.com", "user": "me"}]""")
-        assertEquals(Forge.Gitea, cliForge("git.example.com", ForgeClis(cli("glab", "other.host"), none, tea), env))
-        assertNull(cliForge("unknown.example.com", ForgeClis(cli("glab", "other.host"), cli("gh", "other.host"), tea), env))
+        assertEquals(gitea, cliForge("git.example.com", clis(cli("glab", "other.host"), none, tea), forges, env))
+        assertNull(cliForge("unknown.example.com", clis(cli("glab", "other.host"), cli("gh", "other.host"), tea), forges, env))
     }
 
     /** A server answering `routes` (path -> status, body, extra header) and 404 to the rest. */
-    private fun probe(routes: Map<String, Triple<Int, String, Pair<String, String>?>>): Forge? {
+    private fun probe(routes: Map<String, Triple<Int, String, Pair<String, String>?>>): ForgeProvider? {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/") { ex ->
             val (code, body, header) = routes[ex.requestURI.path] ?: Triple(404, "<html>not found</html>", null)
@@ -54,7 +59,7 @@ class ForgeTest {
         }
         server.start()
         try {
-            return probeForge("http://127.0.0.1:${server.address.port}")
+            return probeForge("http://127.0.0.1:${server.address.port}", forges)
         } finally {
             server.stop(0)
         }
@@ -62,9 +67,9 @@ class ForgeTest {
 
     @Test
     fun serverTellsTheForge() {
-        assertEquals(Forge.GitLab, probe(mapOf("/api/v4/version" to Triple(401, """{"message":"401 Unauthorized"}""", null))))
-        assertEquals(Forge.Gitea, probe(mapOf("/api/v1/version" to Triple(200, """{"version":"1.24.0"}""", null))))
-        assertEquals(Forge.GitHub, probe(mapOf("/api/v3/meta" to Triple(200, "{}", "X-GitHub-Enterprise-Version" to "3.14.0"))))
+        assertEquals(lab, probe(mapOf("/api/v4/version" to Triple(401, """{"message":"401 Unauthorized"}""", null))))
+        assertEquals(gitea, probe(mapOf("/api/v1/version" to Triple(200, """{"version":"1.24.0"}""", null))))
+        assertEquals(hub, probe(mapOf("/api/v3/meta" to Triple(200, "{}", "X-GitHub-Enterprise-Version" to "3.14.0"))))
         assertNull(probe(emptyMap()))
         // A sign-in proxy redirecting everything: unknown, not a guess.
         assertNull(probe(mapOf("/api/v4/version" to Triple(302, "", "Location" to "https://sso.example.com/"))))
@@ -74,12 +79,20 @@ class ForgeTest {
 
     @Test
     fun oldCliPathsMoveToTheServers() {
-        val lab = ReviewServer("https://git.example.com", Forge.GitLab, ServerLogin.Cli)
-        val own = ReviewServer("https://lab2.example.com", Forge.GitLab, ServerLogin.Auto, "/opt/glab")
-        val tea = ReviewServer("https://tea.example.com", Forge.Gitea, ServerLogin.Token)
-        val (servers, left) = takeOverCliPaths(listOf(lab, own, tea),
-            mapOf(Forge.GitLab to "~/bin/glab", Forge.GitHub to "/usr/local/bin/gh", Forge.Gitea to ""))
-        assertEquals(listOf(lab.copy(cli = "~/bin/glab"), own, tea), servers)
-        assertEquals(mapOf(Forge.GitHub to "/usr/local/bin/gh"), left)
+        val one = ReviewServer("https://git.example.com", lab, ServerLogin.Cli)
+        val own = ReviewServer("https://lab2.example.com", lab, ServerLogin.Auto, "/opt/glab")
+        val tea = ReviewServer("https://tea.example.com", gitea, ServerLogin.Token)
+        val (servers, left) = takeOverCliPaths(listOf(one, own, tea),
+            mapOf("glab" to "~/bin/glab", "gh" to "/usr/local/bin/gh", "tea" to ""))
+        assertEquals(listOf(one.copy(cli = "~/bin/glab"), own, tea), servers)
+        assertEquals(mapOf("gh" to "/usr/local/bin/gh"), left)
+    }
+
+    @Test
+    fun unknownForgeEntryIsNoServer() {
+        val entry = ServerEntry().also { it.url = "https://bb.example.com"; it.forge = "Bitbucket" }
+        assertNull(entry.toServer(forges))
+        entry.forge = "gitea"
+        assertEquals(gitea, entry.toServer(forges)?.forge)
     }
 }

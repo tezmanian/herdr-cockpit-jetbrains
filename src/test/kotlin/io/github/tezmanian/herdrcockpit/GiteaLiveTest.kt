@@ -21,7 +21,7 @@ class GiteaLiveTest {
     @Test
     fun pendingReviewRoundTrip() {
         assumeTrue("HC_GITEA_* not set", listOf(url, tokenFile, repoPath, branch).all { !it.isNullOrBlank() })
-        val api = RestApi(Forge.Gitea.apiBase(url), Forge.Gitea.auth(File(tokenFile).readText().trim()))
+        val api = RestApi(GiteaForge().apiBase(url!!.trimEnd('/')), GiteaForge().auth(File(tokenFile).readText().trim()))
         val review = GiteaReview(api, RemoteRepo(java.net.URI(url).host, repoPath))
 
         val pr = review.candidates(branch, null).single()

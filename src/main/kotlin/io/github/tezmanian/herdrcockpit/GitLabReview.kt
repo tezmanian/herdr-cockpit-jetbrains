@@ -5,7 +5,6 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 
 class GitLabReview(private val api: ForgeApi, repo: RemoteRepo) : ForgeReview {
-    override val forge = Forge.GitLab
     private val p = repo.gitlab
 
     private fun list(path: String) = JsonParser.parseString(api.call("GET", path, null)).asJsonArray.map { it.asJsonObject }

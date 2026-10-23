@@ -20,18 +20,11 @@ data class ChangeRequest(
 
 /** One forge's side of the flow. */
 interface ForgeReview {
-    val forge: Forge
     /** Open requests that may hold the reviewed `head` (or come from `branch`), best first; more than one: ask. */
     fun candidates(branch: String?, head: String?): List<ChangeRef>
     fun load(number: Int): ChangeRequest
     /** Posts `findings` (all on changed files) unpublished: on their line when the diff shows it, else naming it. */
     fun send(cr: ChangeRequest, findings: List<Finding>): Int
-}
-
-fun forgeReview(forge: Forge, api: ForgeApi, repo: RemoteRepo): ForgeReview = when (forge) {
-    Forge.GitLab -> GitLabReview(api, repo)
-    Forge.GitHub -> GitHubReview(api, repo)
-    Forge.Gitea -> GiteaReview(api, repo)
 }
 
 /** Those whose head is `head`, else those from `branch`, else those that contain `head` (pushed to since). */

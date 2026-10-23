@@ -57,10 +57,10 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
     }
 
     /** A review an agent owes: where it writes, and the branch (if any) and commit it reviews, to find the merge request. `forge` is known when it was started from that forge's tool window. */
-    private class PendingReview(val root: String, val out: File, val since: Long, val branch: String?, val head: String?, val forge: Forge? = null)
+    private class PendingReview(val root: String, val out: File, val since: Long, val branch: String?, val head: String?, val forge: ForgeProvider? = null)
     private val reviews = ConcurrentHashMap<String, PendingReview>()
     /** The forge found per host; unknown ones are asked again next time. */
-    private val forges = ConcurrentHashMap<String, Forge>()
+    private val found = ConcurrentHashMap<String, ForgeProvider>()
 
     /** Asks the agent to review its folder's branch against a target and write findings to a file; nothing is posted. */
     fun reviewBranch(space: Space, pane: Pane) {
@@ -103,7 +103,7 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
                     Item("$name (${a.status ?: AgentStatus.unknown})", null) {
                         val out = reviewFile(File(System.getProperty("user.home")), s.label, "mr-" + head.take(12))
                         val (extra, template) = reviewInstructions(name, CHANGES_TEMPLATE, DEFAULT_CHANGES_TEMPLATE) ?: return@Item
-                        startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head, Forge.GitLab)) {
+                        startReview(name, a.id, PendingReview(root, out, System.currentTimeMillis(), null, head, forgeNamed("GitLab"))) {
                             reviewChangesPrompt(root, base, head, paths, out, extra, template)
                         }
                     }
@@ -146,19 +146,19 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
         ApplicationManager.getApplication().executeOnPooledThread {
             val target = remote?.let(::target)
             if (remote != null) host.log("review: ${remote.host} is ${target?.forge?.title ?: "an unknown kind of server"}")
-            offerFindings(name, r, findings, target?.takeIf { r.forge == null || it.forge == r.forge })
+            offerFindings(name, r, findings, target?.takeIf { r.forge == null || it.forge.title == r.forge.title })
         }
     }
 
     /** Where a review can go: the forge, the repository on it (a subpath install's prefix taken off) and your server entry. */
-    private class Target(val forge: Forge, val repo: RemoteRepo, val server: ReviewServer?) {
+    private class Target(val forge: ForgeProvider, val repo: RemoteRepo, val server: ReviewServer?) {
         val send get() = "Send to ${forge.title} as ${forge.pending}…"
     }
 
     /** The forge of `remote`: your server entry, else what was found before, else detection. Background thread. */
     private fun target(remote: RemoteRepo): Target? {
         val server = HerdrSettings.serverFor(remote.host)
-        val forge = server?.forge ?: forges[remote.host] ?: detectForge(remote.host, foundClis())?.also { forges[remote.host] = it }
+        val forge = server?.forge ?: found[remote.host] ?: forges().let { all -> detectForge(remote.host, foundClis(all), all) }?.also { found[remote.host] = it }
         val repo = server?.prefix?.takeIf { it.isNotEmpty() && remote.path.startsWith("$it/") }?.let { remote.copy(path = remote.path.removePrefix("$it/")) } ?: remote
         return forge?.let { Target(it, repo, server) }
     }
@@ -188,11 +188,11 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
     /** Findings as unpublished comments on the merge/pull request: signs in as the server entry says (Review servers). */
     private fun sendReview(r: PendingReview, t: Target, findings: List<Finding>): Unit = run("Send review to ${t.forge.title}") {
         when (val reach = reach(t.forge, t.repo.host, t.server)) {
-            is Reach.Ready -> prepareReview(forgeReview(t.forge, reach.api, t.repo), reach, r, t, findings)
+            is Reach.Ready -> prepareReview(t.forge.review(reach.api, t.repo), reach, r, t, findings)
             is Reach.Fail -> notify(reach.message, NotificationType.WARNING)
             is Reach.NeedToken -> later {
                 val entered = Messages.showPasswordDialog(project,
-                    "No ${t.forge.cli} signed in to ${t.repo.host}${if (t.forge == Forge.GitLab) " and no GitLab account in the IDE" else ""}. " +
+                    "No ${t.forge.cli} signed in to ${t.repo.host}${if (t.forge.ideAccounts != null) " and no ${t.forge.title} account in the IDE" else ""}. " +
                         "Set the server up under Settings | Tools | Herdr Cockpit | Review servers, or enter an access token here " +
                         "(kept in the IDE's password safe):",
                     "${t.forge.title} Token for ${t.repo.host}", null)?.trim()?.ifEmpty { null } ?: return@later
@@ -243,10 +243,8 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
             findings.forEach { addItem(it, "${it.path}:${it.line}  ${it.body.lineSequence().first().take(120)}", true) }
         }
         val notes = listOfNotNull(
-            (if (f == Forge.GitLab) "Draft notes on" else "A pending review on") + " $ref ${cr.title} (via ${reach.via}). " +
-                "Nothing is published: you submit the review on ${f.title}.",
-            if (f == Forge.GitLab) "Findings on lines outside the diff become drafts on the merge request that name the file and line."
-            else "Findings on lines outside the diff go into the review's text, naming the file and line.",
+            "${f.sendsAs} $ref ${cr.title} (via ${reach.via}). Nothing is published: you submit the review on ${f.title}.",
+            f.offDiff,
             if (left > 0) "$left finding${if (left > 1) "s" else ""} on files the ${f.request} doesn't change are left out." else null,
             if (r.head != null && r.head != cr.headSha) "The review saw ${r.head.take(8)}, the ${f.request} is at ${cr.headSha.take(8)}: lines may be off." else null,
         )

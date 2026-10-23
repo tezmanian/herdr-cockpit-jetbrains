@@ -14,6 +14,18 @@
     <!-- "Review with Agent…" in the GitLab tool window's merge request changes; without the GitLab plugin it's just absent. -->
     <depends optional="true" config-file="herdr-gitlab.xml">org.jetbrains.plugins.gitlab</depends>
 
+    <!-- Forges agent reviews can be sent to; a plugin can add one (ForgeProvider, experimental). -->
+    <extensionPoints>
+        <extensionPoint name="forge" interface="io.github.tezmanian.herdrcockpit.ForgeProvider" dynamic="true"/>
+    </extensionPoints>
+
+    <!-- The built-in forges, registered like any other; their order is the order detection asks them in. -->
+    <extensions defaultExtensionNs="io.github.tezmanian.herdrcockpit">
+        <forge implementation="io.github.tezmanian.herdrcockpit.GitLabForge"/>
+        <forge implementation="io.github.tezmanian.herdrcockpit.GiteaForge"/>
+        <forge implementation="io.github.tezmanian.herdrcockpit.GitHubForge"/>
+    </extensions>
+
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Herdr" anchor="left" icon="/icons/herdr.svg"
                     factoryClass="io.github.tezmanian.herdrcockpit.HerdrToolWindowFactory"/>

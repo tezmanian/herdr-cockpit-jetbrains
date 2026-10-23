@@ -1,10 +1,12 @@
-// GitHub and Gitea: findings as one pending review on the pull request. Line comments where the diff shows the line,
-// the rest in the review's text. No IntelliJ imports.
+// GitHub and Gitea: their providers, and findings as one pending review on the pull request. Line comments where the
+// diff shows the line, the rest in the review's text. No IntelliJ imports.
 package io.github.tezmanian.herdrcockpit
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import java.net.URI
+import java.net.http.HttpResponse
 
 /**
  * The pending review's body: `comment` turns a finding on a diff line into a line comment. `event` is how the forge
@@ -36,7 +38,6 @@ private fun pullRef(o: JsonObject) = ChangeRef(o.get("number").asInt, o.str("tit
     o.child("head")?.str("ref") ?: "", o.child("base")?.str("ref") ?: "", o.child("head")?.str("sha"))
 
 class GitHubReview(private val api: ForgeApi, private val repo: RemoteRepo) : ForgeReview {
-    override val forge = Forge.GitHub
     private val r = repo.repos
 
     private fun list(path: String) = JsonParser.parseString(api.call("GET", path, null)).asJsonArray.map { it.asJsonObject }
@@ -84,7 +85,6 @@ class GitHubReview(private val api: ForgeApi, private val repo: RemoteRepo) : Fo
 }
 
 class GiteaReview(private val api: ForgeApi, repo: RemoteRepo) : ForgeReview {
-    override val forge = Forge.Gitea
     private val r = repo.repos
 
     // Gitea only maps a commit to its merged pull request, so open ones are matched from the list.
@@ -113,4 +113,47 @@ class GiteaReview(private val api: ForgeApi, repo: RemoteRepo) : ForgeReview {
         }
         return findings.size
     }
+}
+
+private const val PENDING_OFF_DIFF = "Findings on lines outside the diff go into the review's text, naming the file and line."
+
+class GitHubForge : ForgeProvider {
+    override val title = "GitHub"
+    override val sign = "#"
+    override val request = "pull request"
+    override val pending = "Pending Review"
+    override val sendsAs = "A pending review on"
+    override val offDiff = PENDING_OFF_DIFF
+    override val cli = "gh"
+    override val tokenHint = "Fine-grained token with pull requests read and write."
+    override val knownHosts = setOf("github.com")
+
+    override fun cliSignIn(host: String) = "gh auth login --hostname $host"
+    override fun cliApi(bin: String, host: String, env: Map<String, String>) = bin.takeIf { cliSignedIn(it, host, env) }?.let { ghApi(it, host, env) }
+    /** GitHub Enterprise names itself in a header of /api/v3/meta. */
+    override fun probe(get: (String) -> HttpResponse<String>?) = get("/api/v3/meta")?.headers()?.firstValue("X-GitHub-Enterprise-Version")?.isPresent == true
+    override fun apiBase(web: String) = if (URI(web).host.equals("github.com", true)) "https://api.github.com" else "$web/api/v3"
+    override fun headers() = mapOf("Accept" to "application/vnd.github+json")
+    override fun review(api: ForgeApi, repo: RemoteRepo): ForgeReview = GitHubReview(api, repo)
+}
+
+class GiteaForge : ForgeProvider {
+    override val title = "Gitea"
+    override val sign = "#"
+    override val request = "pull request"
+    override val pending = "Pending Review"
+    override val sendsAs = "A pending review on"
+    override val offDiff = PENDING_OFF_DIFF
+    override val cli = "tea"
+    override val tokenHint = "Access token with repository read and write."
+    override val knownHosts = setOf("codeberg.org", "gitea.com")
+
+    override fun cliSignIn(host: String) = "tea login add --url https://$host"
+    override fun cliApi(bin: String, host: String, env: Map<String, String>) = teaLogins(bin, env)[host.lowercase()]?.let { teaApi(bin, it, env) }
+    /** Gitea tells its version to anyone. */
+    override fun probe(get: (String) -> HttpResponse<String>?) =
+        get("/api/v1/version")?.let { it.statusCode() == 200 && jsonObject(it.body())?.has("version") == true } == true
+    override fun apiBase(web: String) = "$web/api/v1"
+    override fun auth(token: String) = "token $token"
+    override fun review(api: ForgeApi, repo: RemoteRepo): ForgeReview = GiteaReview(api, repo)
 }

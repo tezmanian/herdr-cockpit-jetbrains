@@ -302,11 +302,11 @@ class ForgeReviewTest {
         server.start()
         try {
             val web = "http://127.0.0.1:${server.address.port}"
-            val base = Forge.Gitea.apiBase(web)
-            assertEquals("{}", RestApi(base, Forge.Gitea.auth("good")).call("POST", "repos/o/r/pulls/5/reviews", "{\"body\":\"n\"}"))
+            val base = GiteaForge().apiBase(web)
+            assertEquals("{}", RestApi(base, GiteaForge().auth("good")).call("POST", "repos/o/r/pulls/5/reviews", "{\"body\":\"n\"}"))
             assertEquals("POST /api/v1/repos/o/r/pulls/5/reviews token good {\"body\":\"n\"}", seen.single())
             try {
-                RestApi(base, Forge.Gitea.auth("bad")).call("GET", "user", null)
+                RestApi(base, GiteaForge().auth("bad")).call("GET", "user", null)
                 fail("401 must throw")
             } catch (e: ForgeError) {
                 assertEquals(401, e.status)
@@ -318,11 +318,11 @@ class ForgeReviewTest {
 
     @Test
     fun apiRoots() {
-        assertEquals("https://gitlab.example.com/api/v4", Forge.GitLab.apiBase("https://gitlab.example.com/"))
-        assertEquals("https://api.github.com", Forge.GitHub.apiBase("https://github.com"))
-        assertEquals("https://ghe.example.com/api/v3", Forge.GitHub.apiBase("https://ghe.example.com"))
-        assertEquals("https://example.com/gitea/api/v1", Forge.Gitea.apiBase("https://example.com/gitea"))
-        assertEquals("Bearer t", Forge.GitHub.auth("t"))
-        assertEquals("token t", Forge.Gitea.auth("t"))
+        assertEquals("https://gitlab.example.com/api/v4", GitLabForge().apiBase("https://gitlab.example.com"))
+        assertEquals("https://api.github.com", GitHubForge().apiBase("https://github.com"))
+        assertEquals("https://ghe.example.com/api/v3", GitHubForge().apiBase("https://ghe.example.com"))
+        assertEquals("https://example.com/gitea/api/v1", GiteaForge().apiBase("https://example.com/gitea"))
+        assertEquals("Bearer t", GitHubForge().auth("t"))
+        assertEquals("token t", GiteaForge().auth("t"))
     }
 }

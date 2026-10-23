@@ -103,21 +103,25 @@ class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSe
         /** Your servers; the first call moves the old global CLI paths into them. */
         fun servers(): List<ReviewServer> {
             val s = get()
-            val old = mapOf(Forge.GitLab to s.glabPath, Forge.GitHub to s.ghPath, Forge.Gitea to s.teaPath).mapValues { it.value ?: "" }
+            val old = mapOf("glab" to s.glabPath, "gh" to s.ghPath, "tea" to s.teaPath).mapValues { it.value ?: "" }
             if (old.values.any { it.isNotBlank() }) {
-                val (servers, left) = takeOverCliPaths(s.servers.mapNotNull { it.toServer() }, old)
+                val (servers, left) = takeOverCliPaths(s.servers.mapNotNull { it.toServer(forges()) }, old)
                 setServers(servers)
                 s.glabPath = ""; s.ghPath = ""; s.teaPath = ""
                 NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit").createNotification(
                     "The CLI paths are now set per server (Settings | Tools | Herdr Cockpit | Review servers)." +
-                        if (left.isEmpty()) " Yours were moved there." else " Add a server to use " + left.entries.joinToString { "${it.key.cli} at ${it.value}" } + ".",
+                        if (left.isEmpty()) " Yours were moved there." else " Add a server to use " + left.entries.joinToString { "${it.key} at ${it.value}" } + ".",
                     NotificationType.INFORMATION).notify(null)
             }
-            return s.servers.mapNotNull { it.toServer() }
+            return s.servers.mapNotNull { it.toServer(forges()) }
         }
 
+        /** Entries of a forge no plugin registers now (one turned off, say) stay as they are. */
         fun setServers(servers: List<ReviewServer>) {
-            get().servers = servers.mapTo(mutableListOf()) { it.toEntry() }
+            val s = get()
+            val forges = forges()
+            val unknown = s.servers.filter { e -> forges.none { it.title.equals(e.forge, ignoreCase = true) } }
+            s.servers = (servers.map { it.toEntry() } + unknown).toMutableList()
         }
 
         /** Your entry for the server at `host`, if any. */

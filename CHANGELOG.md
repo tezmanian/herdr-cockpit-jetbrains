@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.24
+- Forges (GitLab, GitHub, Gitea) now register through an extension point of their own,
+  `io.github.tezmanian.herdrcockpit.forge` (interface `ForgeProvider`, experimental). A plugin can add a further forge
+  without touching the core; the built-in ones register the same way. A review server entry whose type no plugin
+  provides any more stays in the settings unchanged instead of being dropped. No other change in behaviour.
+
 ## 0.1.23
 - Review templates: what Review Branch with Agent… and Review with Agent… send now comes from the prompt library, in
   the new categories "branch template" and "changes template" (with several, the review dialog lets you pick and remembers your choice), with

@@ -318,6 +318,21 @@ If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your liv
 For screenshots, a pane can pose as an agent without starting one:
 `herdr pane report-agent <pane> --source demo --agent claude --state blocked --message "…"`.
 
+### Adding a forge
+
+Reviews can go to any forge a plugin registers through the extension point `io.github.tezmanian.herdrcockpit.forge`
+(interface `ForgeProvider`, still experimental). GitLab, GitHub and Gitea register the same way:
+
+```xml
+<extensions defaultExtensionNs="io.github.tezmanian.herdrcockpit">
+    <forge implementation="com.example.BitbucketForge"/>
+</extensions>
+```
+
+A provider says how the forge is detected (known hosts, a signed-in CLI, an anonymous probe), how to sign in (CLI,
+token header, API root, optionally an IDE account) and returns its `ForgeReview` (find the request, load it, send the
+findings unpublished). The send flow, the Review servers table, tokens and the diff parser stay in the core.
+
 ### Layout (src/main/kotlin/io/github/tezmanian/herdrcockpit)
 
 | File | Role |
@@ -328,12 +343,14 @@ For screenshots, a pane can pose as an agent without starting one:
 | `Activity.kt` | shell/agent summaries from `pane.process_info` + `pane.read` |
 | `Usage.kt` | plan usage of Claude Code, Codex and Kiro from their local files (port of `usage.ts`) |
 | `AgentReview.kt` | agent reviews: the prompt templates and their variables, the findings file (`parseReview()` checks the agent's output) |
-| `Forge.kt` | GitLab, GitHub, Gitea: what differs (API root, auth), the repo from a remote, detecting which one a host is |
+| `ForgeProvider.kt` | The `forge` extension point's interface: what the core needs from a forge (detection, sign-in, API, its review) |
+| `Forge.kt` | The repo from a remote, detecting which registered forge a host is |
 | `ForgeApi.kt` | How review calls reach a forge: REST with a token, or `glab`/`gh`/`tea api` with the CLI's login |
 | `ForgeReview.kt` | The send flow's common part: finding the request, the diff's lines, defused texts |
+| `GitLabForge.kt` | GitLab's provider, with the IDE's GitLab account |
 | `GitLabReview.kt` | GitLab: draft notes on the merge request |
-| `PendingReviews.kt` | GitHub and Gitea: one pending review on the pull request |
-| `ReviewServers.kt` | Review servers table, sign-in (CLI, token, IDE account), tokens in the password safe |
+| `PendingReviews.kt` | GitHub's and Gitea's providers; one pending review on the pull request |
+| `ReviewServers.kt` | The registered forges, review servers table, sign-in (CLI, token, IDE account), tokens in the password safe |
 | `EntryTable.kt` | The settings table used by the prompt library and the review servers |
 | `ClaudeSessions.kt` | Claude Code's saved sessions for a folder, for "Switch Claude Session…" |
 | `GitInfo.kt` | git CLI with the upstream's hardening (no fsmonitor, filters, hooks, lazy fetch); skipped in untrusted projects |
