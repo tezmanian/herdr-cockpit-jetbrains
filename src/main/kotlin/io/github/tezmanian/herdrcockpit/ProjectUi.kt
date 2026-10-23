@@ -1,6 +1,7 @@
 // The small UI helpers HerdrManage and ReviewFlow share: popups, input and prompt dialogs, background tasks, notifications.
 package io.github.tezmanian.herdrcockpit
 
+import com.intellij.ide.util.PropertiesComponent
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
@@ -55,21 +56,24 @@ abstract class ProjectUi(protected val project: Project, private val log: (Strin
      * after `initial`. With `required`, OK needs text beyond `initial` (the message says what). Null when cancelled.
      */
     protected fun promptDialog(title: String, message: String, category: String, initial: String, required: String?): String? =
-        promptDialog(title, message, category, initial, required, emptyList())?.first
+        promptDialog(title, message, category, initial, required, emptyList(), "")?.first
 
     /**
-     * The prompt dialog, plus a choice among `templates` (label, text) when there are several; (text, chosen template's text,
-     * the first when there's no choice, "" without templates). Null when cancelled.
+     * The prompt dialog, plus a choice among `templates` (label, text) when there are several, preselecting the one last
+     * picked under `templateKey`; (text, chosen template's text, "" without templates). Null when cancelled.
      */
     protected fun promptDialog(title: String, message: String, category: String, initial: String, required: String?,
-                               templates: List<Pair<String, String>>): Pair<String, String>? {
+                               templates: List<Pair<String, String>>, templateKey: String): Pair<String, String>? {
         val presets = promptPresets(project, category)
         val area = JBTextArea(initial, 10, 70).apply { lineWrap = true; wrapStyleWord = true }
-        var template = templates.firstOrNull()?.second ?: ""
+        val key = "herdr-cockpit.template.$templateKey"
+        val last = PropertiesComponent.getInstance().getValue(key)
+        var chosen = templates.indexOfFirst { it.first == last }.coerceAtLeast(0)
         val content = panel {
             if (templates.size > 1) row("Template:") {
                 comboBox(templates.map { it.first }).applyToComponent {
-                    addActionListener { template = templates[selectedIndex].second }
+                    selectedIndex = chosen
+                    addActionListener { chosen = selectedIndex }
                 }.comment("The whole prompt the review sends (prompt library, categories ending in \"template\").")
             }
             row { label(message) }
@@ -89,7 +93,10 @@ abstract class ProjectUi(protected val project: Project, private val log: (Strin
             override fun doValidate() =
                 if (required != null && (area.text.isBlank() || area.text.trim() == initial.trim())) ValidationInfo(required, area) else null
         }
-        return if (dialog.showAndGet()) area.text.trim() to template else null
+        if (!dialog.showAndGet()) return null
+        val template = templates.getOrNull(chosen)
+        if (templates.size > 1) PropertiesComponent.getInstance().setValue(key, template?.first)
+        return area.text.trim() to (template?.second ?: "")
     }
 
     protected fun later(f: () -> Unit) = ApplicationManager.getApplication().invokeLater(f, project.disposed)

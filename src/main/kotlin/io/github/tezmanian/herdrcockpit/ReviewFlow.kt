@@ -115,7 +115,7 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
     /** Optional extra instructions ("" when left empty) and the template to send them with; null when cancelled. */
     private fun reviewInstructions(name: String, templateCategory: String, default: String): Pair<String, String>? =
         promptDialog("Review with $name", "Anything $name should look at in particular? (optional)", "review", "", null,
-            reviewTemplates(project, templateCategory, default))
+            reviewTemplates(project, templateCategory, default), templateCategory)
 
     /** Sends the prompt `text` builds (in the background: it may run git). */
     private fun startReview(name: String, paneId: String, review: PendingReview, text: () -> String) = run("Review with $name") {

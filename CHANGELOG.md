@@ -2,7 +2,7 @@
 
 ## 0.1.23
 - Review templates: what Review Branch with Agent… and Review with Agent… send now comes from the prompt library, in
-  the new categories "branch template" and "changes template" (with several, the review dialog lets you pick), with
+  the new categories "branch template" and "changes template" (with several, the review dialog lets you pick and remembers your choice), with
   the variables {repo}, {branch}, {target}, {base}, {head}, {diff}, {files}, {instructions}, {out} and {format}. Lines
   whose variables are all empty are left out; a template without {out} gets the findings-file rules appended. The
   built-in templates are added to your library once. Branch reviews now also list the changed files.
