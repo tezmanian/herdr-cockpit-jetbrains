@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.31
+- Fix: a pane tab opened in the background (e.g. while switching spaces) took the pane over at a default 120×32
+  before it had a size of its own. That shrank the program in the pane, and Claude Code's screen stayed cut off and
+  garbled once the tab was shown. The stream now starts when the tab gets its real size.
+
 ## 0.1.30
 - Shift+Enter in a pane tab starts a new line in an agent's prompt (Claude Code, Codex) instead of sending it, so
   longer prompts can be written in several lines. It sends a line feed (like Ctrl+J); Enter still sends.

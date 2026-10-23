@@ -75,7 +75,7 @@ class HerdrTtyConnector(
     @Volatile private var holderName: String? = null
     private var controlSince = 0L
 
-    /** Starts the stream on first use (JediTerm resizes, then reads); the deprecated init() isn't needed. */
+    /** Starts the stream at the first real size (JediTerm resizes once the tab is shown); the deprecated init() isn't needed. */
     @Synchronized
     fun start() {
         if (proc != null) return
@@ -175,7 +175,8 @@ class HerdrTtyConnector(
     val isEnded: Boolean get() = ended
 
     override fun read(buf: CharArray, offset: Int, length: Int): Int {
-        start()
+        // No start() here: a tab opened in the background reads before it has a size, and taking the pane over at
+        // the default size would shrink the program (and leave its re-rendered screen cut off). resize() starts it.
         while (true) {
             val c = current
             if (c != null && pos < c.size) {
