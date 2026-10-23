@@ -235,10 +235,17 @@ class HerdrTerminalPanel(
     override fun handleKeyEvent(e: KeyEvent) {
         if (e.id == KeyEvent.KEY_PRESSED) swallowTyped = false
         if (e.id == KeyEvent.KEY_PRESSED && tabKey(e)) return e.consume()
-        // The typed event that follows a Backspace / Delete that deleted the selection.
+        // The typed event that follows a Backspace / Delete that deleted the selection, or a Shift+Enter.
         if (e.id == KeyEvent.KEY_TYPED && swallowTyped) {
             swallowTyped = false
-            if (e.keyChar == '\b' || e.keyChar == '\u007f') return e.consume()
+            if (e.keyChar == '\b' || e.keyChar == '\u007f' || e.keyChar == '\n' || e.keyChar == '\r') return e.consume()
+        }
+        // Shift+Enter: a line feed (what Ctrl+J sends), which Claude Code and Codex take as a new line in the prompt;
+        // Enter (carriage return) still submits. A shell runs the line either way.
+        if (e.id == KeyEvent.KEY_PRESSED && e.keyCode == KeyEvent.VK_ENTER && e.modifiersEx == InputEvent.SHIFT_DOWN_MASK) {
+            connector()?.write("\n")
+            swallowTyped = true
+            return e.consume()
         }
         val plain = e.modifiersEx and (InputEvent.CTRL_DOWN_MASK or InputEvent.META_DOWN_MASK or InputEvent.ALT_DOWN_MASK) == 0
         val delete = e.id == KeyEvent.KEY_PRESSED && plain && (e.keyCode == KeyEvent.VK_BACK_SPACE || e.keyCode == KeyEvent.VK_DELETE)

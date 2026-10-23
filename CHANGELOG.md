@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.30
+- Shift+Enter in a pane tab starts a new line in an agent's prompt (Claude Code, Codex) instead of sending it, so
+  longer prompts can be written in several lines. It sends a line feed (like Ctrl+J); Enter still sends.
+
 ## 0.1.29
 - Switch Claude Session… has a search field: typing filters the sessions by title (and date). It now lists the 100
   newest sessions of the folder instead of 30.

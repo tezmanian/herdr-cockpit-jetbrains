@@ -168,7 +168,8 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
   for Claude Code, which attaches the file), so you can ask the agent about them.
 - **Pane tabs**: a JediTerm terminal fed by `herdr terminal session control <pane> --takeover`. Typing, colors,
   resize, selection and copy work; the mouse wheel, Shift+PageUp/PageDown and Ctrl/Cmd+Home/End scroll Herdr's
-  scrollback. File paths a program prints (`src/app.ts:42`) are links to the file at that line. *Open Pane Output in
+  scrollback. Shift+Enter starts a new line in an agent's prompt (a line feed, like Ctrl+J); Enter sends it. File
+  paths a program prints (`src/app.ts:42`) are links to the file at that line. *Open Pane Output in
   Editor* (tab context menu, *Tools | Herdr*) shows the pane's whole history as a read-only document. Ctrl/Cmd+F opens a find bar over that history: the pane
   scrolls to each match, matches are highlighted, Tab lists the matching lines; smart case and `/regex/`. On the line
   being typed, Backspace/Delete deletes a selection and typing replaces it; Alt+click moves the cursor, Shift+click
