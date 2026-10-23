@@ -253,6 +253,15 @@ class ActionsTest {
     }
 
     @Test
+    fun paneKeys() {
+        serve { _, _ -> """{"type":"ok"}""" }
+        actions.paneKeys("w1:p2", listOf("ctrl+j"))
+        assertEquals("pane.send_keys", requests[0].str("method"))
+        assertEquals("w1:p2", params(0).str("pane_id"))
+        assertEquals(listOf("ctrl+j"), params(0).getAsJsonArray("keys").map { it.asString })
+    }
+
+    @Test
     fun blockedAgentRefusesKeysForAnotherOccupant() {
         serve { _, _ -> "!agent_not_running" }
         try {

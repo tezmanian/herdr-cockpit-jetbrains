@@ -233,6 +233,14 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
         }, 5000)
     }
 
+    /** Key presses to the pane, encoded by Herdr for the keyboard mode the program in it asked for (e.g. kitty's). */
+    fun paneKeys(paneId: String, keys: List<String>) {
+        client.request("pane.send_keys", JsonObject().apply {
+            addProperty("pane_id", paneId)
+            add("keys", com.google.gson.JsonArray().apply { keys.forEach { add(it) } })
+        }, 5000)
+    }
+
     /** What the agent's screen shows now (plain text), e.g. the dialog it is waiting at. */
     fun readAgent(paneId: String): String =
         client.request("agent.read", JsonObject().apply { addProperty("target", paneId); addProperty("source", "visible") }, 5000)

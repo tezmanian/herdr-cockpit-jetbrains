@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.32
+- Fix: Shift+Enter in a pane tab still sent Claude Code's prompt. The line feed it typed is Enter to a program that
+  turned on the kitty keyboard protocol, as Claude Code does. Shift+Enter now asks Herdr for Ctrl+J, which Herdr
+  encodes for the keyboard mode the program in the pane uses.
+
 ## 0.1.31
 - Fix: a pane tab opened in the background (e.g. while switching spaces) took the pane over at a default 120×32
   before it had a size of its own. That shrank the program in the pane, and Claude Code's screen stayed cut off and

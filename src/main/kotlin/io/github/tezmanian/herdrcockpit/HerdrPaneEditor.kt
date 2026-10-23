@@ -161,6 +161,8 @@ class HerdrTerminalPanel(
     /** The program's cursor, 0-based (column, row). */
     var cursor: () -> Pair<Int, Int>? = { null }
     var marks: () -> List<Mark> = { emptyList() }
+    /** Keys Herdr encodes for the pane (pane.send_keys), off the EDT. */
+    var paneKeys: (List<String>) -> Unit = {}
 
     init { setBracketedPasteMode(true) }
 
@@ -240,10 +242,11 @@ class HerdrTerminalPanel(
             swallowTyped = false
             if (e.keyChar == '\b' || e.keyChar == '\u007f' || e.keyChar == '\n' || e.keyChar == '\r') return e.consume()
         }
-        // Shift+Enter: a line feed (what Ctrl+J sends), which Claude Code and Codex take as a new line in the prompt;
-        // Enter (carriage return) still submits. A shell runs the line either way.
+        // Shift+Enter: Ctrl+J, which Claude Code and Codex take as a new line in the prompt; Enter still submits. Herdr
+        // encodes it: a raw line feed is Enter to a program that turned on the kitty keyboard protocol (Claude Code does).
         if (e.id == KeyEvent.KEY_PRESSED && e.keyCode == KeyEvent.VK_ENTER && e.modifiersEx == InputEvent.SHIFT_DOWN_MASK) {
-            connector()?.write("\n")
+            val c = connector()
+            if (c?.observing == true) c.takeBack() else if (c != null && !c.isEnded) { c.live = true; paneKeys(listOf("ctrl+j")) }
             swallowTyped = true
             return e.consume()
         }
@@ -482,6 +485,13 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
         widget.panel.connector = { file.connector }
         widget.panel.cursor = { widget.terminal.let { it.cursorX - 1 to it.cursorY - 1 } }
         widget.panel.marks = findBar::marks
+        // shortcut: a socket call beside the pane stream, so keys typed within milliseconds before it could land after
+        // it; send typed text through pane.send_keys too if that ever shows.
+        widget.panel.paneKeys = { keys ->
+            ApplicationManager.getApplication().executeOnPooledThread {
+                runCatching { service.actions.paneKeys(file.paneId, keys) }.onFailure { service.log("pane ${file.paneId}: keys failed: ${it.message}") }
+            }
+        }
         // Herdr draws its own viewport, so the wheel scrolls Herdr's scrollback instead of JediTerm's buffer.
         val panel = widget.terminalPanel
         panel.mouseWheelListeners.forEach(panel::removeMouseWheelListener)
