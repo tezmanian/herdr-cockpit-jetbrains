@@ -77,6 +77,9 @@ abstract class ProjectUi(protected val project: Project, private val log: (Strin
                 }
             })
             .setNamerForFiltering { it.text }
+            // Shown from the start: the hidden speed search only reacts to typing while the list has focus, and opened
+            // from the sidebar the browser keeps it.
+            .setFilterAlwaysVisible(true)
             .setItemChosenCallback { it.run() }
             .createPopup().showCenteredInCurrentWindow(project)
     }

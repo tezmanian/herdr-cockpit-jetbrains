@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.33
+- Fix: Switch Claude Session… had no search field to type in, only the hidden speed search, which did nothing while
+  the sidebar kept the keyboard focus. The search field is now always shown above the list.
+
 ## 0.1.32
 - Fix: Shift+Enter in a pane tab still sent Claude Code's prompt. The line feed it typed is Enter to a program that
   turned on the kitty keyboard protocol, as Claude Code does. Shift+Enter now asks Herdr for Ctrl+J, which Herdr
