@@ -190,7 +190,8 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
 
   ![New tab: a shell or an agent](docs/images/new-tab.png)
 - **Right-click a space or pane** in the sidebar: switch to it, unmount its folder (only a content root the plugin
-  added), open, new tab, rename (space; shell label; agent name), close in Herdr after confirming (a pane, its tab
+  added), open, new tab, split a pane right or down (a shell or an agent, opened as a tab; also in a pane tab's context
+  menu), zoom it in Herdr, rename (space; shell label; agent name), close in Herdr after confirming (a pane, its tab
   when it's the only pane, a space, or a worktree space with its folder; forcing is offered when Herdr refuses because
   of uncommitted changes), "Show Raw" (Herdr's records for it as a read-only JSON tab), and for agents **Hand Off to
   Agent…** (also in the "is done" notification): pick an agent in any space and type what it should do; the prompt
@@ -285,7 +286,7 @@ Bugs and ideas: [GitHub issues](https://github.com/tezmanian/herdr-cockpit-jetbr
 
 ## Not ported
 
-VS Code-only parts: the Cockpit window, terminal profiles (`+`/split in the terminal panel), the walkthrough. The
+VS Code-only parts: the Cockpit window, terminal profiles (`+` in the terminal panel), the walkthrough. The
 sidebar's "Set up Cockpit window" link shows "not available in the JetBrains port".
 
 ## Development

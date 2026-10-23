@@ -51,6 +51,25 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
         }
     }
 
+    /** A new pane beside `pane` in Herdr (a shell or an agent), opened as a tab. */
+    fun split(space: Space, pane: Pane, right: Boolean) {
+        if (!connected()) return
+        val where = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
+        pickWhat("Split $where ${if (right) "right" else "down"}") { what ->
+            run("Splitting $where") {
+                val c = actions.splitPane(pane.id, right, pane.cwd ?: space.cwd)
+                what.label?.let { label -> runCatching { actions.renamePane(c.paneId, label) } }
+                openCreated(it, c, what, space.label)
+            }
+        }
+    }
+
+    /** Herdr's zoom is the tab's layout, so every client of the session sees it. */
+    fun toggleZoom(pane: Pane) {
+        if (!connected()) return
+        run("Zooming") { actions.toggleZoom(pane.id); service.scheduleRefresh() }
+    }
+
     /** New space: in one of the window's projects, a folder you pick, or on a new git worktree of an existing space's repository. */
     fun newSpace() {
         if (!connected()) return
@@ -98,6 +117,11 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
                 add(Item("Switch to Space", AllIcons.Actions.Forward) { service.switchTo(space) })
                 if (service.isOurMount(space)) add(Item("Unmount Folder", AllIcons.Actions.Cancel) { service.unmount(space) })
                 add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
+            }
+            if (pane != null) {
+                add(Item("Split Right…", AllIcons.Actions.SplitVertically, "Layout") { split(space, pane, right = true) })
+                add(Item("Split Down…", AllIcons.Actions.SplitHorizontally) { split(space, pane, right = false) })
+                add(Item("Zoom in Herdr / Unzoom", AllIcons.General.ExpandComponent) { toggleZoom(pane) })
             }
             if (pane == null || pane.isAgent) add(Item("Review Changes", AllIcons.Actions.Diff) { service.reviewFlow.review(space, pane) })
             if (pane?.isAgent == true) add(Item("Review Branch with Agent…", AllIcons.Actions.Preview) { service.reviewFlow.reviewBranch(space, pane) })

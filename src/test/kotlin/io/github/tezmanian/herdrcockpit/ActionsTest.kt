@@ -253,6 +253,23 @@ class ActionsTest {
     }
 
     @Test
+    fun splitAndZoom() {
+        serve { m, _ ->
+            if (m == "pane.split") """{"type":"pane_info","pane":{"pane_id":"w1:p3","tab_id":"w1:t1","workspace_id":"w1"}}"""
+            else """{"type":"pane_zoom","zoom":{"pane_id":"w1:p2","zoomed":true}}"""
+        }
+        assertEquals(Created("w1:p3", "w1:t1", "w1"), actions.splitPane("w1:p2", right = false, cwd = "/repo"))
+        assertEquals("pane.split", requests[0].str("method"))
+        assertEquals("w1:p2", params(0).str("pane_id"))
+        assertEquals("down", params(0).str("direction"))
+        assertEquals("/repo", params(0).str("cwd"))
+        assertFalse(params(0).get("focus").asBoolean)
+        assertTrue(actions.toggleZoom("w1:p2"))
+        assertEquals("pane.zoom", requests[1].str("method"))
+        assertEquals("w1:p2", params(1).str("pane_id"))
+    }
+
+    @Test
     fun paneKeys() {
         serve { _, _ -> """{"type":"ok"}""" }
         actions.paneKeys("w1:p2", listOf("ctrl+j"))

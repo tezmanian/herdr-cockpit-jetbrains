@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.34
+- Split and zoom Herdr panes from the IDE: "Split Right…", "Split Down…" and "Zoom in Herdr / Unzoom" in a pane's
+  right-click menu in the sidebar and in a pane tab's context menu. A split asks for a shell or an agent, like a new
+  tab, and opens the new pane as a tab. Zoom is Herdr's: every client of the session sees it.
+
 ## 0.1.33
 - Fix: Switch Claude Session… had no search field to type in, only the hidden speed search, which did nothing while
   the sidebar kept the keyboard focus. The search field is now always shown above the list.

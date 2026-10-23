@@ -621,6 +621,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             "newSpace" -> manage.newSpace()
             "newTab" -> m?.space(spaceId)?.let { manage.newTab(it) }
             "review" -> m?.space(spaceId)?.let { reviewFlow.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
+            "splitRight", "splitDown" -> m?.find(paneId)?.let { (s, p) -> manage.split(s, p, right = command == "splitRight") }
+            "zoom" -> m?.find(paneId)?.let { manage.toggleZoom(it.second) }
             "menu" -> m?.space(spaceId)?.let { manage.menu(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "setupClaudeUsage" -> manage.setUpClaudeUsage()
             "setKiroCredits" -> manage.setKiroCredits()

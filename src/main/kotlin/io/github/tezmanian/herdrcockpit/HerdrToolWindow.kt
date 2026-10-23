@@ -222,6 +222,18 @@ class OpenPaneOutputAction : DumbAwareAction("Open Pane Output in Editor", "The 
     override fun getActionUpdateThread() = ActionUpdateThread.EDT
 }
 
+/** Split or zoom the pane of a pane tab in Herdr (the tab's context menu). */
+open class PaneLayoutAction(text: String, description: String, icon: javax.swing.Icon, private val command: String) : DumbAwareAction(text, description, icon) {
+    private fun paneId(e: AnActionEvent) = (e.getData(CommonDataKeys.VIRTUAL_FILE) as? HerdrPaneFile)?.paneId
+    override fun update(e: AnActionEvent) { e.presentation.isEnabledAndVisible = e.project != null && paneId(e) != null }
+    override fun actionPerformed(e: AnActionEvent) { e.project?.let { HerdrService.getInstance(it).handle(command, null, paneId(e)) } }
+    override fun getActionUpdateThread() = ActionUpdateThread.BGT
+}
+
+class SplitPaneRightAction : PaneLayoutAction("Split Pane Right in Herdr…", "A new shell or agent to the right of this pane", AllIcons.Actions.SplitVertically, "splitRight")
+class SplitPaneDownAction : PaneLayoutAction("Split Pane Down in Herdr…", "A new shell or agent below this pane", AllIcons.Actions.SplitHorizontally, "splitDown")
+class ZoomPaneAction : PaneLayoutAction("Zoom Pane in Herdr / Unzoom", "Let this pane fill its tab in Herdr, or back", AllIcons.General.ExpandComponent, "zoom")
+
 class OpenTuiAction : DumbAwareAction("Open Herdr TUI", "Run herdr in an editor tab", AllIcons.Nodes.Console) {
     override fun actionPerformed(e: AnActionEvent) { e.project?.let { HerdrService.getInstance(it).openTui() } }
     override fun getActionUpdateThread() = ActionUpdateThread.BGT

@@ -133,6 +133,19 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     fun createSpace(cwd: String, label: String?): Created =
         created(client.request("workspace.create", params("cwd" to cwd, "label" to label), 5000))
 
+    /** New pane beside `paneId` (to the right or below): a fresh shell in `cwd`. */
+    fun splitPane(paneId: String, right: Boolean, cwd: String?): Created {
+        val pane = client.request("pane.split", params("pane_id" to paneId, "direction" to if (right) "right" else "down", "cwd" to cwd), 5000)
+            .getAsJsonObject("pane") ?: throw HerdrError("bad_response", "herdr didn't return the new pane")
+        val str = { k: String -> pane.get(k)?.takeIf { it.isJsonPrimitive }?.asString }
+        return Created(str("pane_id") ?: throw HerdrError("bad_response", "herdr didn't return the new pane"), str("tab_id"), str("workspace_id"))
+    }
+
+    /** Zooms the pane to fill its tab in Herdr, or back; whether it is zoomed now. Herdr also focuses it. */
+    fun toggleZoom(paneId: String): Boolean =
+        client.request("pane.zoom", JsonObject().apply { addProperty("pane_id", paneId) }, 5000)
+            .getAsJsonObject("zoom")?.get("zoomed")?.asBoolean ?: false
+
     private fun scrollOf(r: JsonObject): PaneScroll {
         val s = r.getAsJsonObject("pane")?.getAsJsonObject("scroll") ?: throw HerdrError("bad_response", "Herdr gave no scroll position for this pane")
         return PaneScroll(s.get("offset_from_bottom").asInt, s.get("max_offset_from_bottom").asInt, s.get("viewport_rows").asInt)

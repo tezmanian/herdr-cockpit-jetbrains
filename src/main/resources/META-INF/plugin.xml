@@ -56,6 +56,15 @@
             <action id="HerdrCockpit.OpenPaneOutput" class="io.github.tezmanian.herdrcockpit.OpenPaneOutputAction">
                 <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
             </action>
+            <action id="HerdrCockpit.SplitPaneRight" class="io.github.tezmanian.herdrcockpit.SplitPaneRightAction">
+                <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+            </action>
+            <action id="HerdrCockpit.SplitPaneDown" class="io.github.tezmanian.herdrcockpit.SplitPaneDownAction">
+                <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+            </action>
+            <action id="HerdrCockpit.ZoomPane" class="io.github.tezmanian.herdrcockpit.ZoomPaneAction">
+                <add-to-group group-id="EditorTabPopupMenu" anchor="last"/>
+            </action>
         </group>
     </actions>
 </idea-plugin>
