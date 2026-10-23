@@ -5,3 +5,6 @@ build/
 .idea/
 *.iml
 out/
+
+# graphify knowledge graph (local, rebuilt by `graphify update .`)
+graphify-out/
