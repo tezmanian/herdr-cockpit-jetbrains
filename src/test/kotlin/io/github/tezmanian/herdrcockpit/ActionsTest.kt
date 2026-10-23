@@ -279,6 +279,20 @@ class ActionsTest {
     }
 
     @Test
+    fun integrations() {
+        serve { m, _ ->
+            if (m == "integration.list") """{"type":"integration_list","integrations":[{"target":"claude","label":"claude","command":"claude","available":true,"state":"current"},{"target":"antigravity_cli","label":"antigravity-cli","command":"agy","available":false,"state":"outdated"},{"label":"no target"}]}"""
+            else """{"type":"ok"}"""
+        }
+        assertEquals(listOf(Integration("claude", "claude", true, "current"), Integration("antigravity_cli", "antigravity-cli", false, "outdated")), actions.integrations())
+        actions.installIntegration("antigravity_cli")
+        assertEquals("integration.install", requests[1].str("method"))
+        assertEquals("antigravity_cli", params(1).str("target"))
+        actions.uninstallIntegration("claude")
+        assertEquals("integration.uninstall", requests[2].str("method"))
+    }
+
+    @Test
     fun blockedAgentRefusesKeysForAnotherOccupant() {
         serve { _, _ -> "!agent_not_running" }
         try {

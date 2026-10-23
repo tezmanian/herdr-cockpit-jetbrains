@@ -90,6 +90,9 @@ fun favoriteAgents(setting: String?): List<String> =
 /** Herdr's view of a pane: `offset` rows above the bottom, at most `max`; `rows` on screen. */
 data class PaneScroll(val offset: Int, val max: Int, val rows: Int)
 
+/** One of Herdr's agent integrations. `state`: not_installed, current or outdated; `available`: the agent's command was found. */
+data class Integration(val target: String, val label: String, val available: Boolean, val state: String)
+
 /** A new tab or space: its first pane (attach it like any other pane). */
 data class Created(val paneId: String, val tabId: String?, val workspaceId: String?)
 
@@ -252,6 +255,24 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
             addProperty("pane_id", paneId)
             add("keys", com.google.gson.JsonArray().apply { keys.forEach { add(it) } })
         }, 5000)
+    }
+
+    /** Herdr's agent integrations (the hooks that report an agent's session) and whether each is installed. */
+    fun integrations(): List<Integration> =
+        client.request("integration.list", JsonObject(), 5000).getAsJsonArray("integrations")?.mapNotNull { e ->
+            val o = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+            val str = { k: String -> o.get(k)?.takeIf { it.isJsonPrimitive }?.asString }
+            val target = str("target") ?: return@mapNotNull null
+            Integration(target, str("label") ?: target, o.get("available")?.takeIf { it.isJsonPrimitive }?.asBoolean ?: false, str("state") ?: "unknown")
+        }.orEmpty()
+
+    /** Installs (or updates) an integration: Herdr writes into that agent's own config. Only on the user's click. */
+    fun installIntegration(target: String) {
+        client.request("integration.install", JsonObject().apply { addProperty("target", target) }, 60_000)
+    }
+
+    fun uninstallIntegration(target: String) {
+        client.request("integration.uninstall", JsonObject().apply { addProperty("target", target) }, 60_000)
     }
 
     /** What the agent's screen shows now (plain text), e.g. the dialog it is waiting at. */

@@ -200,6 +200,13 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 onIsModified { table.items != HerdrSettings.prompts() }
                 onApply { HerdrSettings.setPrompts(table.items) }
             }
+            group("Agent integrations") {
+                val integrations = IntegrationTable()
+                row {
+                    cell(integrations.component).align(Align.FILL)
+                        .comment("Small hooks that report an agent's session to Herdr, next to Herdr's own screen detection of its state. The agent's config folder must exist (run the agent once first). Install and Uninstall change that agent's own configuration (e.g. ~/.claude/settings.json).")
+                }.resizableRow()
+            }
             group("New tabs") {
                 row("Agents:") {
                     textField().bindText({ s.agents ?: "" }, { s.agents = it }).columns(COLUMNS_LARGE)

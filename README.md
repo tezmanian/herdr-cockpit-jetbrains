@@ -72,6 +72,9 @@ herdr integration install codex      # Codex (~/.codex, or CODEX_HOME)
 herdr integration install cursor     # also: pi, omp, copilot, devin, droid, kimi, opencode, kilo, hermes, qodercli, qwen, letta, mastracode, antigravity-cli, grok
 ```
 
+Or in the IDE: *Settings | Tools | Herdr Cockpit | Agent integrations* lists them with their state and has Install /
+Update and Uninstall. When Herdr reports one as outdated (after a Herdr update), the plugin says so once.
+
 The same is in Herdr's settings, tab *Integrations*.
 
 The **agent skill** teaches an agent running in a Herdr pane to use the `herdr` CLI: look at neighbouring panes, run

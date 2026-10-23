@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.35
+- Settings | Tools | Herdr Cockpit | Agent integrations: Herdr's agent integrations with their state (installed,
+  outdated) and whether the agent was found, with Install / Update and Uninstall. They change the agent's own
+  configuration, so only on a click. When Herdr reports an integration as outdated, a notification says so once per
+  Herdr version.
+
 ## 0.1.34
 - Split and zoom Herdr panes from the IDE: "Split Right…", "Split Down…" and "Zoom in Herdr / Unzoom" in a pane's
   right-click menu in the sidebar and in a pane tab's context menu. A split asks for a shell or an agent, like a new

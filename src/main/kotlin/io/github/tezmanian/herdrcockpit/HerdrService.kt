@@ -57,6 +57,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     companion object {
         fun getInstance(project: Project): HerdrService = project.service()
         private val LOG = Logger.getInstance(HerdrService::class.java)
+        /** Herdr versions whose integrations were checked: one warning per version and IDE run, not per project. */
+        private val integrationsChecked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     }
 
     private sealed class Conn(val kind: String) {
@@ -206,12 +208,23 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             conn = Conn.Connected(next.version, next.protocol)
             failures = 0
             apply(next)
-            if (!wasConnected) log("connected to herdr ${next.version ?: ""}".trim())
+            if (!wasConnected) {
+                log("connected to herdr ${next.version ?: ""}".trim())
+                warnOutdatedIntegrations(next.version)
+            }
             // Panes came or went: move the live subscription to the new set.
             if (sub != null && next.paneIds().sorted().joinToString(" ") != subscribedPanes) startEvents()
         } catch (e: Exception) {
             onFailure(e)
         }
+    }
+
+    private fun warnOutdatedIntegrations(version: String?) {
+        if (!integrationsChecked.add(version ?: "")) return
+        val old = runCatching { actions.integrations() }.getOrElse { log("integration.list: ${it.message}"); return }.filter { it.state == "outdated" }
+        if (old.isEmpty()) return
+        herdrNotify(project, "Herdr's integration for ${old.joinToString(", ") { it.label }} is outdated. Update it in the settings.",
+            NotificationType.WARNING, "Open Settings" to { ShowSettingsUtil.getInstance().showSettingsDialog(project, HerdrConfigurable::class.java) })
     }
 
     private fun onFailure(e: Exception) {
