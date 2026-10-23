@@ -195,7 +195,7 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
   Agent…** (also in the "is done" notification): pick an agent in any space and type what it should do; the prompt
   (`agent.prompt`) adds where the work came from and `herdr agent read <pane>` to read its output. For Claude agents,
   **Switch Claude Session…** starts a new session (`/clear`) or resumes one of Claude Code's saved sessions for the
-  agent's folder (`/resume <id>`, newest first, with their titles).
+  agent's folder (`/resume <id>`, the 100 newest first, with their titles; the field above the list searches them).
 - **Review Branch with Agent…** (right-click an agent): the agent reviews its folder's branch against a branch you
   pick (`git diff <target>...HEAD`) and writes its findings as JSON to `~/.herdr-cockpit/reviews/`. Nothing is posted
   to GitLab or anywhere else. When it's done, a notification lists the findings; each opens the file at its line.

@@ -124,14 +124,12 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
         val name = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
         val cwd = pane.cwd ?: space.cwd
         ApplicationManager.getApplication().executeOnPooledThread {
-            val sessions = cwd?.let { claudeSessions(claudeProjectDir(File(System.getProperty("user.home")), it)) }.orEmpty()
+            val sessions = cwd?.let { claudeSessions(claudeProjectDir(File(System.getProperty("user.home")), it), limit = 100) }.orEmpty()
             ApplicationManager.getApplication().invokeLater {
                 val send = { text: String -> prompt("$name: $text", name, pane.id, text) }
-                choose("Switch Claude session of $name", buildList {
+                chooseFiltered("Switch Claude session of $name", buildList {
                     add(Item("New Session (/clear)", AllIcons.General.Add) { send("/clear") })
-                    sessions.forEachIndexed { i, s ->
-                        add(Item("${sessionWhen(s.modified)}  ${s.title}", null, if (i == 0) "Resume" else null) { send("/resume ${s.id}") })
-                    }
+                    sessions.forEach { s -> add(Item("${sessionWhen(s.modified)}  ${s.title}", AllIcons.Vcs.History) { send("/resume ${s.id}") }) }
                 })
             }
         }

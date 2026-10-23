@@ -19,6 +19,7 @@ import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.dsl.builder.Align
@@ -26,6 +27,7 @@ import com.intellij.ui.dsl.builder.panel
 import java.awt.MouseInfo
 import java.io.File
 import javax.swing.Icon
+import javax.swing.JList
 
 /** A "Herdr Cockpit" balloon in `project`, from any thread, with `actions` (label, what it does; each closes it). */
 fun herdrNotify(project: Project, html: String, type: NotificationType, vararg actions: Pair<String, () -> Unit>) = ApplicationManager.getApplication().invokeLater {
@@ -62,6 +64,21 @@ abstract class ProjectUi(protected val project: Project, private val log: (Strin
         val popup = JBPopupFactory.getInstance().createListPopup(step)
         val mouse = if (atMouse) MouseInfo.getPointerInfo()?.location else null
         if (mouse != null) popup.show(RelativePoint.fromScreen(mouse)) else popup.showCenteredInCurrentWindow(project)
+    }
+
+    /** Like [choose], with a search field above the list that filters it by the items' text: for long lists. */
+    protected fun chooseFiltered(title: String, items: List<Item>) {
+        JBPopupFactory.getInstance().createPopupChooserBuilder(items)
+            .setTitle(title)
+            .setRenderer(object : ColoredListCellRenderer<Item>() {
+                override fun customizeCellRenderer(list: JList<out Item>, value: Item?, index: Int, selected: Boolean, hasFocus: Boolean) {
+                    icon = value?.icon
+                    append(value?.text ?: "")
+                }
+            })
+            .setNamerForFiltering { it.text }
+            .setItemChosenCallback { it.run() }
+            .createPopup().showCenteredInCurrentWindow(project)
     }
 
     protected fun input(title: String, message: String, initial: String = "", error: (String) -> String? = { if (it.isBlank()) "Enter a name" else null }): String? =
