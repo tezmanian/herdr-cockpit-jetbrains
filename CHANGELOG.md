@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.25
+- Fix: a NullPointerException at startup ("Cannot invoke kotlin.Lazy.getValue()" in HerdrService.getClaims) meant
+  stale takeover claims in ~/.herdr-cockpit/claims weren't pruned. The startup task could run before the field it
+  uses was set.
+
 ## 0.1.24
 - Forges (GitLab, GitHub, Gitea) now register through an extension point of their own,
   `io.github.tezmanian.herdrcockpit.forge` (interface `ForgeProvider`, experimental). A plugin can add a further forge

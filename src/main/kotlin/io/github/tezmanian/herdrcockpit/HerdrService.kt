@@ -110,6 +110,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     @Volatile private var usage = JsonArray()
     private var codexLive: JsonObject? = null
     private var codexLiveAt = 0L
+    // Before init {}: its first task runs on another thread right away and may beat the rest of the constructor.
+    private val claims = Claims()
 
     init {
         loop.execute { guard { claims.prune() } }
@@ -319,7 +321,6 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     }
 
     // ---------- another client took a pane over ----------
-    private val claims by lazy { Claims() } // lazy: init {} runs before this line
     private val me get() = PaneClaim(ApplicationNamesInfo.getInstance().fullProductName, "jetbrains", ProcessHandle.current().pid(), System.currentTimeMillis())
 
     fun paneHooks(paneId: String) = object : PaneHooks {
