@@ -24,7 +24,6 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Iconable
 import com.intellij.openapi.util.UserDataHolderBase
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.terminal.JBTerminalPanel
 import com.intellij.terminal.JBTerminalSystemSettingsProviderBase
@@ -491,10 +490,7 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
             val bases = listOfNotNull(hit?.second?.cwd, hit?.first?.cwd).distinct()
             val items = findFileRefs(line).take(50).mapNotNull { ref ->
                 val target = resolveRef(ref, bases, System.getProperty("user.home")) ?: return@mapNotNull null
-                LinkResultItem(ref.start, ref.start + ref.length, LinkInfo {
-                    val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(target) ?: return@LinkInfo
-                    OpenFileDescriptor(project, vf, (ref.line ?: 1) - 1, (ref.col ?: 1) - 1).navigate(true)
-                })
+                LinkResultItem(ref.start, ref.start + ref.length, LinkInfo { openFileAt(project, target, (ref.line ?: 1) - 1, (ref.col ?: 1) - 1) })
             }
             if (items.isEmpty()) null else LinkResult(items)
         })

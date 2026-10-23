@@ -17,7 +17,6 @@ import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.project.Project
@@ -214,9 +213,7 @@ class ReviewFlow(project: Project, private val host: ReviewHost) : ProjectUi(pro
         val send = listOfNotNull(target?.let { Item(it.send, AllIcons.Actions.Upload) { sendReview(r, it, findings) } })
         choose("Review by $name", send + findings.mapIndexed { i, f ->
             Item("${f.path}:${f.line}  ${f.body.lineSequence().first().take(120)}", null, if (i == 0 && send.isNotEmpty()) "Findings" else null) {
-                val vf = LocalFileSystem.getInstance().refreshAndFindFileByPath("${r.root}/${f.path}")
-                    ?: return@Item notify("${f.path} doesn't exist (any more).", NotificationType.WARNING)
-                OpenFileDescriptor(project, vf, f.line - 1, 0).navigate(true)
+                openFileAt(project, File(r.root, f.path), f.line - 1) { notify("${f.path} doesn't exist (any more).", NotificationType.WARNING) }
                 notify("${f.path}:${f.line}: ${f.body}", NotificationType.INFORMATION)
             }
         })

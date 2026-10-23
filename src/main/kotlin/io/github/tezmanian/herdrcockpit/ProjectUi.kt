@@ -6,6 +6,7 @@ import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
@@ -17,11 +18,13 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.panel
 import java.awt.MouseInfo
+import java.io.File
 import javax.swing.Icon
 
 /** A "Herdr Cockpit" balloon in `project`, from any thread, with `actions` (label, what it does; each closes it). */
@@ -29,6 +32,18 @@ fun herdrNotify(project: Project, html: String, type: NotificationType, vararg a
     if (!project.isDisposed) NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit").createNotification(html, type)
         .apply { actions.forEach { (label, run) -> addAction(NotificationAction.createSimpleExpiring(label) { run() }) } }
         .notify(project)
+}
+
+/**
+ * Opens `file` at `line` and `col` (0-based), from any thread. The file is looked up (and refreshed into the VFS) on a
+ * pooled thread: a synchronous refresh on the EDT needs the write-intent lock, which a click in a terminal doesn't
+ * hold. `missing` runs (pooled thread) when there's no such file.
+ */
+fun openFileAt(project: Project, file: File, line: Int, col: Int = 0, missing: () -> Unit = {}) {
+    ApplicationManager.getApplication().executeOnPooledThread {
+        val vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file) ?: return@executeOnPooledThread missing()
+        ApplicationManager.getApplication().invokeLater({ OpenFileDescriptor(project, vf, line, col).navigate(true) }, project.disposed)
+    }
 }
 
 abstract class ProjectUi(protected val project: Project, private val log: (String) -> Unit) {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.28
+- Fix: clicking a file path printed in a pane tab (or a finding in an agent review's list) threw "Access is allowed
+  from write thread only" in newer IDEs instead of opening the file. The file is now looked up and refreshed in the
+  background and opened on the UI thread.
+
 ## 0.1.27
 - Fix: pasting a longer text into a pane tab could arrive cut off or garbled (e.g. Claude Code lost its beginning).
   Herdr's frames don't carry the program's modes, so the tab never used bracketed paste: the paste went out as typed
