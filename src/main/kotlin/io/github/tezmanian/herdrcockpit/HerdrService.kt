@@ -523,6 +523,10 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         if (isMounted(space)) return true
         if (tooBroadToMount(cwd, System.getProperty("user.home"), project.basePath))
             return false.also { notify("Not adding $cwd to the project: it is your home folder or contains the project.", NotificationType.WARNING) }
+        val others = ProjectManager.getInstance().openProjects.filter { it != project && !it.isDisposed }.mapNotNull { it.basePath }
+        otherProjectOf(cwd, others)?.let { other ->
+            return false.also { notify("Not adding $cwd to the project: it belongs to the project open at $other.", NotificationType.INFORMATION) }
+        }
         val module = ModuleManager.getInstance(project).modules.firstOrNull()
             ?: return false.also { notify("This project has no module to add ${space.label}'s folder to.", NotificationType.WARNING) }
         val dir = LocalFileSystem.getInstance().findFileByPath(cwd) ?: run {

@@ -79,6 +79,10 @@ fun rollup(ss: List<AgentStatus?>): AgentStatus? = ss.filterNotNull().maxByOrNul
 fun tooBroadToMount(cwd: String, home: String, base: String?): Boolean =
     cwd == "/" || cwd == home || (base != null && (base == cwd || base.startsWith("$cwd/")))
 
+/** The other open project whose folder is [cwd], lies inside it or contains it: that space is that window's to mount. */
+fun otherProjectOf(cwd: String, others: List<String>): String? =
+    others.firstOrNull { cwd == it || cwd.startsWith("$it/") || it.startsWith("$cwd/") }
+
 fun projectSpace(spaces: List<Space>, base: String): Space? =
     spaces.firstOrNull { it.cwd == base } ?: spaces.firstOrNull { it.cwd?.startsWith("$base/") == true }
 

@@ -194,6 +194,13 @@ class ViewTest {
     }
 
     @Test
+    fun leavesOtherProjectsFoldersToThem() {
+        val others = listOf("/p/one", "/p/two")
+        listOf("/p/one", "/p/one/sub", "/p").forEach { assertEquals(it, "/p/one", otherProjectOf(it, others)) }
+        listOf("/p/one-b", "/q").forEach { assertNull(it, otherProjectOf(it, others)) }
+    }
+
+    @Test
     fun parsesGitStatus() {
         val g = parseStatus("## main...origin/main [ahead 1, behind 2]\nM  a.txt\n M b.txt\n?? c.txt\nUU d.txt\n")
         assertEquals(listOf("main", "origin/main", 1, 2, 1, 1, 1, 1, 4), listOf(g.branch, g.upstream, g.ahead, g.behind, g.staged, g.modified, g.untracked, g.conflicts, g.changes))

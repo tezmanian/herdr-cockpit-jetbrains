@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.37
+- Fix: with two projects open, switching in one window to the other project's space (or attaching one of its panes)
+  added that project's folder as a content root. A space whose folder is another open project's folder, lies inside
+  it or contains it is no longer mounted; its panes still open as tabs.
+
 ## 0.1.36
 - Windows (untested): the plugin connects to Herdr's named pipe, which Herdr names after its socket path, as the VS
   Code extension does. The default socket path there is `%APPDATA%\herdr\herdr.sock`.
