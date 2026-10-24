@@ -507,6 +507,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         PropertiesComponent.getInstance().setValue(ACTIVITY_KEY, keep.toString())
     }
     private fun isManaged() = props().getBoolean(MANAGED_KEY, false)
+    @Volatile private var mountWanted: String? = null
     private fun mountedRoots(): List<String> = props().getList(MOUNTED_KEY) ?: emptyList()
 
     private fun isMounted(space: Space): Boolean {
@@ -515,34 +516,40 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     }
 
     /**
-     * Adds the space's folder as a content root of the project's first module and removes the root this plugin
-     * added for the previous space. Never touches a content root the plugin didn't add.
+     * Adds the space's folder as a content root of the project's first module, removes the root this plugin added for
+     * the previous space and selects the folder in the Project view. Never touches a content root the plugin didn't add.
      */
-    private fun mount(space: Space): Boolean {
-        val cwd = space.cwd ?: return false.also { notify("No working directory known for space \"${space.label}\".", NotificationType.WARNING) }
-        if (isMounted(space)) return true
-        if (tooBroadToMount(cwd, System.getProperty("user.home"), project.basePath))
-            return false.also { notify("Not adding $cwd to the project: it is your home folder or contains the project.", NotificationType.WARNING) }
-        val others = ProjectManager.getInstance().openProjects.filter { it != project && !it.isDisposed }.mapNotNull { it.basePath }
-        otherProjectOf(cwd, others)?.let { other ->
-            return false.also { notify("Not adding $cwd to the project: it belongs to the project open at $other.", NotificationType.INFORMATION) }
-        }
-        val module = ModuleManager.getInstance(project).modules.firstOrNull()
-            ?: return false.also { notify("This project has no module to add ${space.label}'s folder to.", NotificationType.WARNING) }
-        val dir = LocalFileSystem.getInstance().findFileByPath(cwd) ?: run {
-            // A folder the IDE hasn't seen yet (e.g. a new worktree): load it off the EDT, then try again.
-            ApplicationManager.getApplication().executeOnPooledThread {
-                if (LocalFileSystem.getInstance().refreshAndFindFileByPath(cwd) != null) edt { mount(space) }
+    private fun mount(space: Space) {
+        mountWanted = null
+        val cwd = space.cwd ?: return notify("No working directory known for space \"${space.label}\".", NotificationType.WARNING)
+        if (!isMounted(space)) {
+            if (tooBroadToMount(cwd, System.getProperty("user.home"), project.basePath))
+                return notify("Not adding $cwd to the project: it is your home folder or contains the project.", NotificationType.WARNING)
+            val others = ProjectManager.getInstance().openProjects.filter { it != project && !it.isDisposed }.mapNotNull { it.basePath }
+            otherProjectOf(cwd, others)?.let { other ->
+                return notify("Not adding $cwd to the project: it belongs to the project open at $other.", NotificationType.INFORMATION)
             }
-            return false
+            if (ModuleManager.getInstance(project).modules.isEmpty())
+                return notify("This project has no module to add ${space.label}'s folder to.", NotificationType.WARNING)
         }
-        val ours = mountedRoots()
-        ModuleRootModificationUtil.updateModel(module) { m ->
-            for (e in m.contentEntries) if (e.url in ours && e.file?.path != cwd) m.removeContentEntry(e)
-            m.addContentEntry(dir)
+        mountWanted = cwd
+        // Finding the folder can hit the disk (e.g. a new worktree), which the EDT must not wait for.
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val dir = LocalFileSystem.getInstance().refreshAndFindFileByPath(cwd) ?: return@executeOnPooledThread
+            edt {
+                if (mountWanted != cwd) return@edt // switched to another space meanwhile
+                if (!isMounted(space)) {
+                    val module = ModuleManager.getInstance(project).modules.firstOrNull() ?: return@edt
+                    val ours = mountedRoots()
+                    ModuleRootModificationUtil.updateModel(module) { m ->
+                        for (e in m.contentEntries) if (e.url in ours && e.file?.path != cwd) m.removeContentEntry(e)
+                        m.addContentEntry(dir)
+                    }
+                    props().setList(MOUNTED_KEY, listOf(dir.url))
+                }
+                ProjectView.getInstance(project).select(null, dir, false)
+            }
         }
-        props().setList(MOUNTED_KEY, listOf(dir.url))
-        return true
     }
 
     fun isOurMount(space: Space): Boolean = ourRoot(space) != null
@@ -569,9 +576,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         switching = true
         try {
             props().setValue(MANAGED_KEY, true)
-            if (settings.mountOnSwitch && mount(space)) {
-                space.cwd?.let { LocalFileSystem.getInstance().findFileByPath(it) }?.let { ProjectView.getInstance(project).select(null, it, false) }
-            }
+            if (settings.mountOnSwitch) mount(space)
             if (!fromHerdr) {
                 loop.execute { guard { actions.focusSpace(space.id) } }
                 lastFocusedSpace = space.id // don't let follow mode bounce us

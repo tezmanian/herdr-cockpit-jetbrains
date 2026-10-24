@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.38
+- Fix: switching to a space looked its folder up on the UI thread, which the IDE reports as an error ("Slow
+  operations are prohibited on EDT"). The folder is now found in the background, then added and selected. A switch
+  to another space in the meantime drops the stale one.
+
 ## 0.1.37
 - Fix: with two projects open, switching in one window to the other project's space (or attaching one of its panes)
   added that project's folder as a content root. A space whose folder is another open project's folder, lies inside
