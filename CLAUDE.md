@@ -68,8 +68,9 @@ skipped in untrusted projects.
 
 - Herdr API rules that bite: every create passes `focus:false`. `worktree.create` refuses `workspace_id` and `cwd`
   together. Agent names must match `AGENT_NAME`. `null` params are sent as JSON null to mean "clear".
-- Avoid platform APIs that are deprecated in 2026.2: `verifyPlugin` flags them (for example `ReadAction.compute`; use
-  `ApplicationManager.getApplication().runReadAction`).
+- Avoid platform APIs that are deprecated in 2026.2 or 2026.3: `verifyPlugin` flags them (for example `ReadAction.compute`;
+  use `ApplicationManager.getApplication().runReadAction`. `FileEditorManager.openFile(file, focus)`; use
+  `OpenFileDescriptor(project, file).navigate(focus)`, since its 2026.3 replacement is missing in 2025.3).
 - Known limits are marked in code as `// shortcut: <limit>, <when to upgrade>`.
 - Remote: gitea.root-zone.info/tez/herdr-cockpit, which push-mirrors to github.com/tezmanian/herdr-cockpit-jetbrains
   (the public home). Internal issues live on Gitea, issues from outside on GitHub, and the numbers overlap: a bare
