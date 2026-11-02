@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.39
+- Opens Herdr panes, the help, the TUI and the raw JSON view without the editor API that PhpStorm 2026.3
+  deprecates. Checked against PhpStorm 2025.3.6.1, 2026.2.4 and 2026.3 RC.
+
 ## 0.1.38
 - Fix: switching to a space looked its folder up on the UI thread, which the IDE reports as an error ("Slow
   operations are prohibited on EDT"). The folder is now found in the background, then added and selected. A switch

@@ -197,7 +197,7 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
         val json = com.google.gson.GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(raw)
         val name = (pane?.let { paneName(space.tabs.firstOrNull { t -> t.id == it.tabId }, it) } ?: space.label) + ".json"
         val file = com.intellij.testFramework.LightVirtualFile(name, FileTypeManager.getInstance().getFileTypeByExtension("json"), json).apply { isWritable = false }
-        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(file, true)
+        com.intellij.openapi.fileEditor.OpenFileDescriptor(project, file).navigate(true)
     }
 
     /** A space, or a pane (shells: the pane label; agents: the agent's name). */

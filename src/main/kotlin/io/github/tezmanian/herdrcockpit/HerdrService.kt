@@ -22,6 +22,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.module.ModuleManager
@@ -619,7 +620,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             f = HerdrPaneFile(pane.id, space.id, editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.isAgent).also { it.polite = polite }
             files[pane.id] = f
         }
-        fem.openFile(f, focus)
+        OpenFileDescriptor(project, f).navigate(focus)
         scheduleRender()
     }
 
@@ -659,7 +660,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
 
     fun openHelp() {
         val fem = FileEditorManager.getInstance(project)
-        fem.openFile(help?.takeIf { fem.isFileOpen(it) } ?: HerdrHelpFile().also { help = it }, true)
+        OpenFileDescriptor(project, help?.takeIf { fem.isFileOpen(it) } ?: HerdrHelpFile().also { help = it }).navigate(true)
     }
 
     /** The Herdr TUI in an editor tab; it may start the server, so re-check the connection shortly after. */
@@ -671,7 +672,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
                 if (startServer(binary(), herdrEnvNow(), serverLog()).ok) ensureProjectSpace(focus = true)
                 edt {
                     val fem = FileEditorManager.getInstance(project)
-                    fem.openFile(tui?.takeIf { fem.isFileOpen(it) } ?: HerdrTuiFile().also { tui = it }, true)
+                    OpenFileDescriptor(project, tui?.takeIf { fem.isFileOpen(it) } ?: HerdrTuiFile().also { tui = it }).navigate(true)
                 }
                 nextAttempt = 0
                 lastDiagnosis = 0
