@@ -34,7 +34,7 @@ jobs:
           if-no-files-found: error
 
   verify:
-    # JetBrains Plugin Verifier against PhpStorm 2025.3.6.1 and 2026.2.3 (each IDE ~1 GB, kept in the cache).
+    # JetBrains Plugin Verifier against PhpStorm 2025.3.6.1, 2026.2.4 and 2026.3 RC (each IDE ~1 GB, kept in the cache).
     needs: build
     runs-on: jdk21-runner
     steps:

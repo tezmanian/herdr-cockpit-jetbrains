@@ -310,10 +310,10 @@ Depends only on `com.intellij.modules.platform`, so it runs in every JetBrains I
 
 `.github/workflows/build.yml` (GitHub) and `.gitea/workflows/build.yml` (Gitea, on the `jdk21-runner` runner label, i.e. the image from Development/CI-Runner; Gitea ignores `.github/workflows` while `.gitea/workflows` exists): tests and
 `buildPlugin` (the zip is uploaded as the `herdr-cockpit-plugin` artifact), then `verifyPlugin`, the JetBrains Plugin
-Verifier against PhpStorm 2025.3.6.1 and 2026.2.3. A tag `v<version>` publishes a release with the zip on both. Gitea is
+Verifier against PhpStorm 2025.3.6.1, 2026.2.4 and 2026.3 RC. A tag `v<version>` publishes a release with the zip on both. Gitea is
 the source and push-mirrors to [GitHub](https://github.com/tezmanian/herdr-cockpit-jetbrains), so a tag pushed to Gitea
 releases on GitHub too.
-Locally: `./gradlew verifyPlugin` (downloads both PhpStorm versions once).
+Locally: `./gradlew verifyPlugin` (downloads the PhpStorm versions once).
 
 ### Live test and sandbox IDE (use a throwaway session, never your own)
 

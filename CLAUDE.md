@@ -14,7 +14,7 @@ Needs JDK 21. If `java` isn't on PATH, set `JAVA_HOME` first. On the dev box tha
 ./gradlew test                                   # unit tests
 ./gradlew test --tests '*ActionsTest.renameTab'  # a single test
 ./gradlew buildPlugin                            # -> build/distributions/herdr-cockpit-jetbrains-<version>.zip
-./gradlew verifyPlugin                           # Plugin Verifier vs PhpStorm 2025.3.6.1 and 2026.2.3 (what CI runs)
+./gradlew verifyPlugin                           # Plugin Verifier vs PhpStorm 2025.3.6.1, 2026.2.4 and 2026.3 RC (what CI runs)
 ./gradlew test buildPlugin verifyPlugin --console=plain -q   # full CI check locally
 ```
 

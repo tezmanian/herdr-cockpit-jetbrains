@@ -38,10 +38,12 @@ intellijPlatform {
     }
     buildSearchableOptions = false
     pluginVerification {
-        // The IDE this plugin is for: the oldest supported PhpStorm and the current one.
+        // The IDE this plugin is for: the oldest supported PhpStorm, the current one and the next (2026.3 RC; switch to
+        // "2026.3" once it is released).
         ides {
             create(IntelliJPlatformType.PhpStorm, "2025.3.6.1")
-            create(IntelliJPlatformType.PhpStorm, "2026.2.3")
+            create(IntelliJPlatformType.PhpStorm, "2026.2.4")
+            create(IntelliJPlatformType.PhpStorm, "263.7307.117")
         }
     }
 }
