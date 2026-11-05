@@ -602,14 +602,14 @@ class CorePaneEditor(project: Project, private val file: HerdrPaneFile) : UserDa
 
     init {
         val service = HerdrService.getInstance(project)
-        var startError: String? = null
-        val proc = runCatching {
-            PtyProcessBuilder(service.backend.attachCommand(file.paneId, false, 120, 32).toTypedArray())
-                .setEnvironment(service.herdrEnvNow() + ("TERM" to "xterm-256color"))
-                .setInitialColumns(120).setInitialRows(32)
-                .start()
-        }.onFailure { startError = it.message; service.log("pane ${file.paneId}: couldn't start hc attach: ${it.message}") }.getOrNull()
-        connector = AttachConnector(proc, file.title, startError) {
+        connector = AttachConnector(file.title, { cols, rows ->
+            runCatching {
+                PtyProcessBuilder(service.backend.attachCommand(file.paneId, false, cols, rows).toTypedArray())
+                    .setEnvironment(service.herdrEnvNow() + ("TERM" to "xterm-256color"))
+                    .setInitialColumns(cols).setInitialRows(rows)
+                    .start()
+            }.onFailure { service.log("pane ${file.paneId}: couldn't start hc attach: ${it.message}") }
+        }) {
             file.coreEnded = true
             service.log("pane ${file.paneId}: attach ended")
             service.scheduleRender()
@@ -636,18 +636,55 @@ class CorePaneEditor(project: Project, private val file: HerdrPaneFile) : UserDa
     }
 }
 
-/** `hc attach`'s PTY; after it ends, a note instead of closing the widget (JediTerm closes it on -1). */
-private class AttachConnector(private val proc: PtyProcess?, private val displayName: String, private val startError: String?, private val onEnded: () -> Unit) : TtyConnector {
-    private val reader = proc?.inputStream?.let { java.io.InputStreamReader(it, Charsets.UTF_8) }
+/**
+ * `hc attach`'s PTY; after it ends, a note instead of closing the widget (JediTerm closes it on -1). It starts at the
+ * tab's first real size: hc paints the screen once, at the size it starts with, and a program that is just waiting
+ * (a shell at its prompt) repaints only its own line after a resize, so a start at a guessed size leaves it garbled.
+ * Its output goes through [SyncOutputFilter].
+ */
+private class AttachConnector(
+    private val displayName: String,
+    private val launch: (Int, Int) -> Result<PtyProcess>,
+    private val onEnded: () -> Unit,
+) : TtyConnector {
+    @Volatile private var proc: PtyProcess? = null
+    @Volatile private var reader: java.io.Reader? = null
+    @Volatile private var startError: String? = null
+    private val started = java.util.concurrent.CountDownLatch(1)
     @Volatile private var closed = false
     private val closedLatch = java.util.concurrent.CountDownLatch(1)
     private var note: CharArray? = null
     private var notePos = 0
+    private val sync = SyncOutputFilter()
+    /** Filtered output JediTerm hasn't taken yet. */
+    private var pending = ""
+
+    @Synchronized
+    private fun start(cols: Int, rows: Int) {
+        if (started.count == 0L || closed) return
+        launch(cols, rows).onSuccess { p -> proc = p; reader = java.io.InputStreamReader(p.inputStream, Charsets.UTF_8) }
+            .onFailure { startError = it.message ?: it.toString() }
+        started.countDown()
+    }
 
     override fun read(buf: CharArray, offset: Int, length: Int): Int {
         if (note == null) {
-            val n = runCatching { reader?.read(buf, offset, length) ?: -1 }.getOrDefault(-1)
-            if (n >= 0 || closed) return n
+            // JediTerm reads before the tab has a size; resize() starts hc. JediTerm interrupts this thread on close.
+            try {
+                while (!started.await(200, java.util.concurrent.TimeUnit.MILLISECONDS)) if (closed) return -1
+            } catch (_: InterruptedException) { return -1 }
+            while (pending.isEmpty()) {
+                val n = runCatching { reader?.read(buf, offset, length) ?: -1 }.getOrDefault(-1)
+                if (n < 0) break
+                pending = sync.feed(String(buf, offset, n))
+            }
+            if (pending.isNotEmpty()) {
+                val n = minOf(length, pending.length)
+                pending.toCharArray(buf, offset, 0, n)
+                pending = pending.substring(n)
+                return n
+            }
+            if (closed) return -1
             val why = if (startError != null) "Couldn't start hc attach: $startError. Check the hc binary in the settings."
                 else "The terminal stream ended. Click it in the Herdr sidebar to open it again; if hc said it is unavailable, it is recovering: try again in a moment."
             note = "\u001b[0m\r\n\u001b[2m[Herdr Cockpit] $why\u001b[0m\r\n".toCharArray()
@@ -671,21 +708,26 @@ private class AttachConnector(private val proc: PtyProcess?, private val display
     }
 
     override fun write(string: String) = write(string.toByteArray(Charsets.UTF_8))
-    override fun resize(termSize: TermSize) { proc?.takeIf { it.isAlive }?.winSize = WinSize(maxOf(1, termSize.columns), maxOf(1, termSize.rows)) }
+    override fun resize(termSize: TermSize) {
+        val cols = maxOf(1, termSize.columns)
+        val rows = maxOf(1, termSize.rows)
+        if (started.count != 0L) return start(cols, rows)
+        proc?.takeIf { it.isAlive }?.winSize = WinSize(cols, rows)
+    }
     override fun isConnected() = !closed
     /** Until the tab closes, not until hc exits: the note stays readable. */
     override fun waitFor(): Int {
         closedLatch.await()
         return 0
     }
-    override fun ready(): Boolean = runCatching { reader?.ready() == true }.getOrDefault(false)
+    override fun ready(): Boolean = pending.isNotEmpty() || runCatching { reader?.ready() == true }.getOrDefault(false)
     override fun getName() = displayName
 
     override fun close() {
         if (closed) return
         closed = true
         closedLatch.countDown()
-        proc?.destroy()
+        synchronized(this) { proc?.destroy() }
     }
 }
 

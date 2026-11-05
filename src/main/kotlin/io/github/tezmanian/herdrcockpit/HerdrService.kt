@@ -743,6 +743,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             "newSpace" -> if (has(Capability.structure)) manage.newSpace()
                 else notify("Herdr 2 spaces are made in the Herdr app. No layout yet: open the Herdr app once.", NotificationType.INFORMATION)
             "newTab" -> if (has(Capability.structure)) m?.space(spaceId)?.let { manage.newTab(it) }
+                else notify("Herdr 2 tabs and terminals are made in the Herdr app.", NotificationType.INFORMATION)
             "review" -> if (has(Capability.agentPrompt)) m?.space(spaceId)?.let { reviewFlow.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "splitRight", "splitDown" -> if (has(Capability.structure)) m?.find(paneId)?.let { (s, p) -> manage.split(s, p, right = command == "splitRight") }
             "zoom" -> if (has(Capability.structure)) m?.find(paneId)?.let { manage.toggleZoom(it.second) }

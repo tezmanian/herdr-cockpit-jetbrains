@@ -278,3 +278,22 @@ fun takenOverNote(rows: Int, who: String? = null): String {
     val w = who ?: "another Herdr client"
     return "\u001b7\u001b[${maxOf(1, rows)};1H\u001b[0;7m ${w.replaceFirstChar { it.uppercase() }} is using this pane · type here to take it back \u001b[0m\u001b[K\u001b8"
 }
+
+private const val SYNC_PREFIX = "\u001b[?2026"
+
+/**
+ * Drops DEC mode 2026 (synchronized output) from a terminal stream. JediTerm (2025.3) starts buffering on both
+ * `CSI ? 2026 h` and `l` and stops at the next `l`, or at the first byte after its timeout, so the mode reset that
+ * `hc attach` sends with its first paint left the tab blank until the program printed again. The mode is only a hint
+ * for painting. A cut-off sequence at the end of a chunk waits for the next one, as JediTerm would wait anyway.
+ */
+class SyncOutputFilter {
+    private var carry = ""
+
+    fun feed(chunk: String): String {
+        val s = (carry + chunk).replace("${SYNC_PREFIX}h", "").replace("${SYNC_PREFIX}l", "")
+        val keep = (minOf(SYNC_PREFIX.length, s.length) downTo 1).firstOrNull { SYNC_PREFIX.startsWith(s.takeLast(it)) } ?: 0
+        carry = s.takeLast(keep)
+        return s.dropLast(keep)
+    }
+}

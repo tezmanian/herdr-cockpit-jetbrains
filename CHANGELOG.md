@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.43
+- Herdr 2 (experimental): a terminal tab shows its screen as soon as it opens. It stayed blank until the program
+  printed again (the IDE's terminal waits after the mode reset `hc attach` sends) and could show stray escape
+  text such as `[7m`; `hc attach` now also starts at the tab's size instead of a fixed 120×32.
+- Herdr 2: *New tab* says that tabs are made in the Herdr app instead of doing nothing, and the *Herdr version*
+  setting shows "Herdr 2 (experimental)" in full. (tez/herdr-cockpit#70)
+
 ## 0.1.42
 - Herdr 2 (experimental): an agent's "done" counts as seen once you look at its tab (the tab selected while the
   IDE window is in front), and every Herdr 2 client shows it as read. The pane menu gets *Pin* / *Unpin* (pinned

@@ -1,5 +1,5 @@
 // HerdrTtyConnector: the pane stream starts at the tab's real size, never at the default one.
-// Herdr 2's attach command takes local terminal addresses only.
+// Herdr 2's attach command takes local terminal addresses only, and its output loses mode 2026 (SyncOutputFilter).
 package io.github.tezmanian.herdrcockpit
 
 import com.jediterm.core.util.TermSize
@@ -40,5 +40,17 @@ class ConnectorTest {
         } finally {
             b.dispose()
         }
+    }
+
+    @Test
+    fun syncOutputModeIsDroppedEvenWhenCutBetweenChunks() {
+        val f = SyncOutputFilter()
+        assertEquals("a\u001b[?2004lb", f.feed("a\u001b[?2026l\u001b[?2004l\u001b[?2026hb"))
+        assertEquals("x", f.feed("x\u001b[?20"))
+        assertEquals("y", f.feed("26ly"))
+        assertEquals("a cut-off other sequence waits, then passes", "", f.feed("\u001b"))
+        assertEquals("\u001b[7mz", f.feed("[7mz"))
+        assertEquals("\u001b[?2025l", f.feed("\u001b[?2025l"))
+        assertEquals("", f.feed(""))
     }
 }

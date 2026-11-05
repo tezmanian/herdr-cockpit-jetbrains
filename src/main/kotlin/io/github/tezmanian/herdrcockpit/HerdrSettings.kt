@@ -19,6 +19,7 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
+import com.intellij.ui.dsl.builder.COLUMNS_MEDIUM
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.rows
@@ -148,7 +149,7 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row("Herdr version:") {
                     comboBox(VERSIONS.values.toList()).bindItem({ VERSIONS[s.herdrVersion] ?: VERSIONS.getValue("auto") },
                         { label -> s.herdrVersion = VERSIONS.entries.firstOrNull { it.value == label }?.key ?: "auto" })
-                        .applyToComponent { prototypeDisplayValue = VERSIONS.values.maxBy { it.length } + "  " }
+                        .columns(COLUMNS_MEDIUM)
                         .comment("Automatic: Herdr 1 when it answers, else Herdr 2. Herdr 2 support is experimental: the sidebar mirrors the Herdr app's window and opens its terminals; spaces, tabs and panes are made in the app.")
                 }
             }
