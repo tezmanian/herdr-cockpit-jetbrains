@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.40
+- Internal: the Herdr calls go through one backend boundary, preparing a second backend for Herdr 2
+  (tez/herdr-cockpit#70). No visible change.
+
 ## 0.1.39
 - Opens Herdr panes, the help, the TUI and the raw JSON view without the editor API that PhpStorm 2026.3
   deprecates. Checked against PhpStorm 2025.3.6.1, 2026.2.4 and 2026.3 RC.

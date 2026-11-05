@@ -14,14 +14,14 @@ class LiveTest {
     @Test
     fun snapshotAndPaneStream() {
         assumeTrue("HERDR_LIVE_SOCKET not set", socket != null)
-        val client = HerdrClient { socket!! }
-        val model = normalize(client.request("session.snapshot"))
+        val backend = Herdr1Backend({ findTool("herdr") }, { socket })
+        val model = backend.snapshot()
         val pane = model.spaces.flatMap { it.panes }.first { !it.isAgent }
         val view = buildViewState(ViewInputs(model, true, { null }, { null }, { false }, { false }, { null }, com.google.gson.JsonObject()))
         assertTrue(view.get("connected").asBoolean)
 
         val ended = mutableListOf<String>()
-        val tty = HerdrTtyConnector(findTool("herdr"), pane.id, herdrEnv(socket), "test") { ended += it }
+        val tty = HerdrTtyConnector({ o, c, r -> backend.attachCommand(pane.id, o, c, r) }, pane.id, backend.env(), "test") { ended += it }
         tty.start()
         tty.resize(com.jediterm.core.util.TermSize(100, 30))
         val seen = StringBuilder()
@@ -42,16 +42,16 @@ class LiveTest {
         reader.join(2000)
         assertTrue("closing only detaches: no 'ended' note", ended.isEmpty())
         // The pane is still there in Herdr.
-        assertTrue(normalize(client.request("session.snapshot")).find(pane.id) != null)
+        assertTrue(backend.snapshot().find(pane.id) != null)
     }
 
     @Test
     fun takenOverPaneStaysVisibleAndFirstKeyTakesItBack() {
         assumeTrue("HERDR_LIVE_SOCKET not set", socket != null)
-        val client = HerdrClient { socket!! }
-        val pane = normalize(client.request("session.snapshot")).spaces.flatMap { it.panes }.first { !it.isAgent }
+        val backend = Herdr1Backend({ findTool("herdr") }, { socket })
+        val pane = backend.snapshot().spaces.flatMap { it.panes }.first { !it.isAgent }
         val events = mutableListOf<String>()
-        val tty = HerdrTtyConnector(findTool("herdr"), pane.id, herdrEnv(socket), "test") { synchronized(events) { events += it } }
+        val tty = HerdrTtyConnector({ o, c, r -> backend.attachCommand(pane.id, o, c, r) }, pane.id, backend.env(), "test") { synchronized(events) { events += it } }
         tty.resize(com.jediterm.core.util.TermSize(100, 30))
         val seen = StringBuilder()
         Thread {

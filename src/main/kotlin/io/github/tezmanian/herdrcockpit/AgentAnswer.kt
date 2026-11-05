@@ -21,7 +21,7 @@ private val ANSWER_KEYS = listOf("↑" to "up", "↓" to "down", "1" to "1", "2"
 private const val REDRAW_MS = 400L
 
 /** Reads the agent's screen in the background, then shows it with the keys; each key is sent and the screen read again. */
-fun answerAgent(project: Project, actions: HerdrActions, name: String, paneId: String) {
+fun answerAgent(project: Project, actions: BackendActions, name: String, paneId: String) {
     ApplicationManager.getApplication().executeOnPooledThread {
         val screen = try {
             actions.readAgent(paneId)
@@ -32,7 +32,7 @@ fun answerAgent(project: Project, actions: HerdrActions, name: String, paneId: S
     }
 }
 
-private class AnswerDialog(project: Project, private val actions: HerdrActions, private val name: String,
+private class AnswerDialog(project: Project, private val actions: BackendActions, private val name: String,
                            private val paneId: String, screen: String) : DialogWrapper(project, false) {
     private val area = JBTextArea(screen.trimEnd(), 18, 90).apply { isEditable = false; font = JBFont.create(java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, font.size)) }
     private val status = JBLabel(" ")

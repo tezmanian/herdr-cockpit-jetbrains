@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-class HerdrError(val code: String, message: String) : Exception("$code: $message")
+open class HerdrError(val code: String, message: String) : Exception("$code: $message")
 
 fun interface Subscription {
     fun dispose()

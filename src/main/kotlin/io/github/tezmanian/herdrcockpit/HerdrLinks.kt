@@ -101,6 +101,7 @@ object HerdrLinks {
 
     private fun run(project: Project, link: Link) {
         val service = HerdrService.getInstance(project)
+        if (!service.has(Capability.links)) return
         when (link) {
             is Link.Open -> {
                 service.showToolWindow()

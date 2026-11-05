@@ -477,7 +477,7 @@ class HerdrPaneEditor(private val project: Project, private val file: HerdrPaneF
 
     init {
         val service = HerdrService.getInstance(project)
-        connector = HerdrTtyConnector(service.binary(), file.paneId, service.herdrEnvNow(), file.title, service.paneHooks(file.paneId), file.polite) { why ->
+        connector = HerdrTtyConnector({ o, c, r -> service.backend.attachCommand(file.paneId, o, c, r) }, file.paneId, service.herdrEnvNow(), file.title, service.paneHooks(file.paneId), file.polite) { why ->
             service.log("pane ${file.paneId}: $why")
             service.scheduleRender()
         }

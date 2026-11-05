@@ -38,6 +38,12 @@ Never start real agents (`agent.start`) in tests: they cost money and use the us
 
 Package `io.github.tezmanian.herdrcockpit`. The README's "Layout" table lists the role of each file.
 
+**Backends:** everything that depends on the Herdr version sits behind `Backend` (Backend.kt): snapshot, event
+subscription, diagnosis, the pane stream command and the actions (`BackendActions`). `HerdrService.backend` is a
+`Herdr1Backend` today; a Herdr 2 backend is planned (tez/herdr-cockpit#70). The UI offers only what
+`backend.capabilities` lists (`HerdrService.has(...)`). Backend files have no IntelliJ imports; settings come in as
+functions.
+
 **Data flow (Herdr → UI):** `HerdrClient` speaks NDJSON over the socket. `request()` opens one short connection per
 call, and `subscribe()` holds `events.subscribe` open. On every event (plus a 5 s safety poll), `HerdrService`
 re-snapshots: `session.snapshot` goes through `normalize()` (Model.kt) into Space → Tab → Pane. Activity and git info

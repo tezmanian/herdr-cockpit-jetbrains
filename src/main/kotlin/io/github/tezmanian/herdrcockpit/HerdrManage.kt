@@ -19,6 +19,7 @@ data class What(val kind: String? = null, val label: String? = null)
 
 class HerdrManage(project: Project, private val service: HerdrService) : ProjectUi(project, service::log) {
     private val actions get() = service.actions
+    private fun has(c: Capability) = service.has(c)
 
     private fun connected(): Boolean {
         if (service.isConnected()) return true
@@ -81,7 +82,7 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
                 add(Item("${File(dir).name}  (${dir.replaceFirst(home, "~")})", AllIcons.Nodes.Module, if (i == 0) "Project" else null) { newSpaceIn(dir, File(dir).name) })
             }
             add(Item("Choose a folder…", AllIcons.Nodes.Folder, "Other") { newSpaceInFolder(spaces) })
-            repos.forEachIndexed { i, (s, branch) ->
+            if (has(Capability.worktrees)) repos.forEachIndexed { i, (s, branch) ->
                 add(Item("${s.label}  (branch off $branch)", AllIcons.Vcs.Branch, if (i == 0) "New git worktree of" else null) { newWorktreeSpace(s, branch) })
             }
         }
@@ -111,24 +112,26 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
         if (!connected()) return
         val items = buildList {
             if (pane != null) add(Item("Open", AllIcons.Actions.MenuOpen) { service.attachPane(space, pane) })
-            if (pane?.isAgent == true && pane.status == AgentStatus.blocked)
+            if (pane?.isAgent == true && pane.status == AgentStatus.blocked && has(Capability.agentPrompt))
                 add(Item("Answer…", AllIcons.General.QuestionDialog) { answerAgent(project, actions, editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.id) })
             else {
                 add(Item("Switch to Space", AllIcons.Actions.Forward) { service.switchTo(space) })
                 if (service.isOurMount(space)) add(Item("Unmount Folder", AllIcons.Actions.Cancel) { service.unmount(space) })
-                add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
+                if (has(Capability.structure)) add(Item("New Tab…", AllIcons.General.Add) { newTab(space) })
             }
-            if (pane != null) {
+            if (pane != null && has(Capability.structure)) {
                 add(Item("Split Right…", AllIcons.Actions.SplitVertically, "Layout") { split(space, pane, right = true) })
                 add(Item("Split Down…", AllIcons.Actions.SplitHorizontally) { split(space, pane, right = false) })
                 add(Item("Zoom in Herdr / Unzoom", AllIcons.General.ExpandComponent) { toggleZoom(pane) })
             }
-            if (pane == null || pane.isAgent) add(Item("Review Changes", AllIcons.Actions.Diff) { service.reviewFlow.review(space, pane) })
-            if (pane?.isAgent == true) add(Item("Review Branch with Agent…", AllIcons.Actions.Preview) { service.reviewFlow.reviewBranch(space, pane) })
-            if (pane?.isAgent == true) add(Item("Hand Off to Agent…", AllIcons.Actions.Forward) { handOff(space, pane) })
-            if (pane?.agentKind == "claude") add(Item("Switch Claude Session…", AllIcons.Vcs.History) { switchClaudeSession(space, pane) })
-            add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
-            add(Item("Close in Herdr…", AllIcons.Actions.Close, "Herdr") { closeInHerdr(space, pane) })
+            if (has(Capability.agentPrompt) && (pane == null || pane.isAgent)) add(Item("Review Changes", AllIcons.Actions.Diff) { service.reviewFlow.review(space, pane) })
+            if (pane?.isAgent == true && has(Capability.agentPrompt)) add(Item("Review Branch with Agent…", AllIcons.Actions.Preview) { service.reviewFlow.reviewBranch(space, pane) })
+            if (pane?.isAgent == true && has(Capability.agentPrompt)) add(Item("Hand Off to Agent…", AllIcons.Actions.Forward) { handOff(space, pane) })
+            if (pane?.agentKind == "claude" && has(Capability.agentPrompt)) add(Item("Switch Claude Session…", AllIcons.Vcs.History) { switchClaudeSession(space, pane) })
+            if (has(Capability.structure)) {
+                add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
+                add(Item("Close in Herdr…", AllIcons.Actions.Close, "Herdr") { closeInHerdr(space, pane) })
+            }
             add(Item("Show Raw", AllIcons.FileTypes.Json, "Debug") { showRaw(space, pane) })
         }
         choose(null, items, atMouse = true)

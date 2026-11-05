@@ -107,7 +107,7 @@ fun interface Requester {
     fun request(method: String, params: JsonObject, timeoutMs: Long): JsonObject
 }
 
-class HerdrActions(private val client: Requester, private val sleep: (Long) -> Unit = Thread::sleep) {
+class HerdrActions(private val client: Requester, private val sleep: (Long) -> Unit = Thread::sleep) : BackendActions {
     constructor(client: HerdrClient, sleep: (Long) -> Unit = Thread::sleep) : this(Requester { m, p, t -> client.request(m, p, t) }, sleep)
 
     private fun params(vararg kv: Pair<String, Any?>) = JsonObject().apply {
@@ -129,15 +129,15 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     }
 
     /** New tab in a space: a fresh shell in `cwd` (or the space's default directory). */
-    fun createTab(workspaceId: String, cwd: String?, label: String?): Created =
+    override fun createTab(workspaceId: String, cwd: String?, label: String?): Created =
         created(client.request("tab.create", params("workspace_id" to workspaceId, "cwd" to cwd, "label" to label), 5000))
 
     /** New space rooted at `cwd`. */
-    fun createSpace(cwd: String, label: String?): Created =
+    override fun createSpace(cwd: String, label: String?): Created =
         created(client.request("workspace.create", params("cwd" to cwd, "label" to label), 5000))
 
     /** New pane beside `paneId` (to the right or below): a fresh shell in `cwd`. */
-    fun splitPane(paneId: String, right: Boolean, cwd: String?): Created {
+    override fun splitPane(paneId: String, right: Boolean, cwd: String?): Created {
         val pane = client.request("pane.split", params("pane_id" to paneId, "direction" to if (right) "right" else "down", "cwd" to cwd), 5000)
             .getAsJsonObject("pane") ?: throw HerdrError("bad_response", "herdr didn't return the new pane")
         val str = { k: String -> pane.get(k)?.takeIf { it.isJsonPrimitive }?.asString }
@@ -145,7 +145,7 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     }
 
     /** Zooms the pane to fill its tab in Herdr, or back; whether it is zoomed now. Herdr also focuses it. */
-    fun toggleZoom(paneId: String): Boolean =
+    override fun toggleZoom(paneId: String): Boolean =
         client.request("pane.zoom", JsonObject().apply { addProperty("pane_id", paneId) }, 5000)
             .getAsJsonObject("zoom")?.get("zoomed")?.asBoolean ?: false
 
@@ -155,23 +155,23 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     }
 
     /** Where Herdr's view of a pane is in its history. */
-    fun paneScroll(paneId: String): PaneScroll = scrollOf(client.request("pane.get", JsonObject().apply { addProperty("pane_id", paneId) }, 5000))
+    override fun paneScroll(paneId: String): PaneScroll = scrollOf(client.request("pane.get", JsonObject().apply { addProperty("pane_id", paneId) }, 5000))
 
     /** Scrolls Herdr's view of a pane to `offset` rows above the bottom; answers where it is now. */
-    fun scrollPaneTo(paneId: String, offset: Int): PaneScroll = scrollOf(client.request("pane.scroll", JsonObject().apply {
+    override fun scrollPaneTo(paneId: String, offset: Int): PaneScroll = scrollOf(client.request("pane.scroll", JsonObject().apply {
         addProperty("pane_id", paneId)
         addProperty("offset_from_bottom", offset.coerceAtLeast(0))
     }, 5000))
 
     /** Changes whenever the pane's content does (`pane.copy_motion` without a revision just answers it). */
-    fun paneRevision(paneId: String): Long = client.request("pane.copy_motion", JsonObject().apply {
+    override fun paneRevision(paneId: String): Long = client.request("pane.copy_motion", JsonObject().apply {
         addProperty("pane_id", paneId)
         add("cursor", JsonObject().apply { addProperty("row", 0); addProperty("col", 0) })
         addProperty("motion", "line_end")
     }, 5000).get("content_revision").asLong
 
     /** Everything Herdr keeps for a pane (scrollback and screen) as text. `cols` is the pane's width. */
-    fun paneHistory(paneId: String, cols: Int): String {
+    override fun paneHistory(paneId: String, cols: Int): String {
         val scroll = paneScroll(paneId)
         val last = scroll.max + scroll.rows - 1
         fun at(row: Int, col: Int) = JsonObject().apply { addProperty("row", row); addProperty("col", col) }
@@ -185,18 +185,18 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     }
 
     /** Focuses space `workspaceId` in Herdr's own view (what the TUI shows). */
-    fun focusSpace(workspaceId: String) {
+    override fun focusSpace(workspaceId: String) {
         client.request("workspace.focus", JsonObject().apply { addProperty("workspace_id", workspaceId) }, 5000)
     }
 
     /** Focuses an agent's pane in Herdr's own view; marks its "done" as seen. */
-    fun focusAgent(paneId: String) = call("agent.focus", "target" to paneId)
+    override fun focusAgent(paneId: String) = call("agent.focus", "target" to paneId)
 
     /**
      * New space on a new git worktree (and branch) of the repo of space `workspaceId`. Herdr takes the repo
      * from either workspace_id or cwd and refuses both ("only one of workspace_id or cwd may be supplied").
      */
-    fun createWorktreeSpace(workspaceId: String, branch: String, label: String?): Created =
+    override fun createWorktreeSpace(workspaceId: String, branch: String, label: String?): Created =
         created(client.request("worktree.create", params("workspace_id" to workspaceId, "branch" to branch, "label" to label), 30_000))
 
     /** Renames and closes: `kv` as given, null values sent as JSON null (Herdr's "clear the name"). */
@@ -210,20 +210,20 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
         }, timeoutMs)
     }
 
-    fun renameTab(tabId: String, label: String) = call("tab.rename", "tab_id" to tabId, "label" to label)
-    fun renameSpace(workspaceId: String, label: String) = call("workspace.rename", "workspace_id" to workspaceId, "label" to label)
+    override fun renameTab(tabId: String, label: String) = call("tab.rename", "tab_id" to tabId, "label" to label)
+    override fun renameSpace(workspaceId: String, label: String) = call("workspace.rename", "workspace_id" to workspaceId, "label" to label)
     /** null falls back to the tab name / "Tab N". */
-    fun renamePane(paneId: String, label: String?) = call("pane.rename", "pane_id" to paneId, "label" to label)
+    override fun renamePane(paneId: String, label: String?) = call("pane.rename", "pane_id" to paneId, "label" to label)
     /** `name` must match AGENT_NAME (agent names are CLI targets); null clears it. */
-    fun renameAgent(paneId: String, name: String?) = call("agent.rename", "target" to paneId, "name" to name)
+    override fun renameAgent(paneId: String, name: String?) = call("agent.rename", "target" to paneId, "name" to name)
     /** Text + Enter as one submission; Herdr refuses an agent waiting at a question ("agent_blocked"). */
-    fun promptAgent(paneId: String, text: String) = call("agent.prompt", "target" to paneId, "text" to text)
+    override fun promptAgent(paneId: String, text: String) = call("agent.prompt", "target" to paneId, "text" to text)
 
     /**
      * [promptAgent], then waits up to `timeoutMs` until the agent is in one of `until`; its status then. Herdr first
      * waits a few seconds for the prompt to start work ("agent_prompt_stalled" if it doesn't). Blocks the thread.
      */
-    fun promptAndWait(paneId: String, text: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus =
+    override fun promptAndWait(paneId: String, text: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus =
         statusOf(client.request("agent.prompt", JsonObject().apply {
             addProperty("target", paneId)
             addProperty("text", text)
@@ -231,7 +231,7 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
         }, timeoutMs + WAIT_SLACK_MS))
 
     /** Waits up to `timeoutMs` until the agent is in one of `until` (at once if it already is); its status then. */
-    fun waitAgent(paneId: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus =
+    override fun waitAgent(paneId: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus =
         statusOf(client.request("agent.wait", waitParams(until, timeoutMs).apply { addProperty("target", paneId) }, timeoutMs + WAIT_SLACK_MS))
 
     private fun waitParams(until: Set<AgentStatus>, timeoutMs: Long) = JsonObject().apply {
@@ -242,7 +242,7 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     private fun statusOf(result: JsonObject) = AgentStatus.of(result.getAsJsonObject("agent")?.get("agent_status")?.asString)
 
     /** Key presses ("enter", "esc", "up", "1") to the agent's own UI; refused when that agent no longer holds the pane. */
-    fun sendKeys(paneId: String, keys: List<String>) {
+    override fun sendKeys(paneId: String, keys: List<String>) {
         client.request("agent.send_keys", JsonObject().apply {
             addProperty("target", paneId)
             add("keys", com.google.gson.JsonArray().apply { keys.forEach { add(it) } })
@@ -250,7 +250,7 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     }
 
     /** Key presses to the pane, encoded by Herdr for the keyboard mode the program in it asked for (e.g. kitty's). */
-    fun paneKeys(paneId: String, keys: List<String>) {
+    override fun paneKeys(paneId: String, keys: List<String>) {
         client.request("pane.send_keys", JsonObject().apply {
             addProperty("pane_id", paneId)
             add("keys", com.google.gson.JsonArray().apply { keys.forEach { add(it) } })
@@ -258,7 +258,7 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
     }
 
     /** Herdr's agent integrations (the hooks that report an agent's session) and whether each is installed. */
-    fun integrations(): List<Integration> =
+    override fun integrations(): List<Integration> =
         client.request("integration.list", JsonObject(), 5000).getAsJsonArray("integrations")?.mapNotNull { e ->
             val o = e.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
             val str = { k: String -> o.get(k)?.takeIf { it.isJsonPrimitive }?.asString }
@@ -267,37 +267,37 @@ class HerdrActions(private val client: Requester, private val sleep: (Long) -> U
         }.orEmpty()
 
     /** Installs (or updates) an integration: Herdr writes into that agent's own config. Only on the user's click. */
-    fun installIntegration(target: String) {
+    override fun installIntegration(target: String) {
         client.request("integration.install", JsonObject().apply { addProperty("target", target) }, 60_000)
     }
 
-    fun uninstallIntegration(target: String) {
+    override fun uninstallIntegration(target: String) {
         client.request("integration.uninstall", JsonObject().apply { addProperty("target", target) }, 60_000)
     }
 
     /** What the agent's screen shows now (plain text), e.g. the dialog it is waiting at. */
-    fun readAgent(paneId: String): String =
+    override fun readAgent(paneId: String): String =
         client.request("agent.read", JsonObject().apply { addProperty("target", paneId); addProperty("source", "visible") }, 5000)
             .getAsJsonObject("read")?.get("text")?.asString ?: ""
 
-    fun processInfo(paneId: String): ProcInfo? =
+    override fun processInfo(paneId: String): ProcInfo? =
         parseProcInfo(client.request("pane.process_info", JsonObject().apply { addProperty("pane_id", paneId) }, 5000))
 
     /** Closing ends the processes in it. */
-    fun closePane(paneId: String) = call("pane.close", "pane_id" to paneId)
-    fun closeTab(tabId: String) = call("tab.close", "tab_id" to tabId)
+    override fun closePane(paneId: String) = call("pane.close", "pane_id" to paneId)
+    override fun closeTab(tabId: String) = call("tab.close", "tab_id" to tabId)
     /** Fails with "workspace_group_close_required" when the space has worktree spaces, unless `group` closes them too. */
-    fun closeSpace(workspaceId: String, group: Boolean = false) =
+    override fun closeSpace(workspaceId: String, group: Boolean) =
         if (group) call("workspace.close", "workspace_id" to workspaceId, "close_group" to true) else call("workspace.close", "workspace_id" to workspaceId)
     /** Closes a worktree space and deletes its folder. Herdr refuses uncommitted changes unless `force` (which discards them). */
-    fun removeWorktree(workspaceId: String, force: Boolean = false) =
+    override fun removeWorktree(workspaceId: String, force: Boolean) =
         if (force) call("worktree.remove", "workspace_id" to workspaceId, "force" to true, timeoutMs = 30_000) else call("worktree.remove", "workspace_id" to workspaceId, timeoutMs = 30_000)
 
     /**
      * Starts an agent in a pane at its shell prompt; returns once Herdr reports it ready. `name` must match
      * AGENT_NAME and be unused (see agentName()).
      */
-    fun startAgent(paneId: String, kind: String, name: String) {
+    override fun startAgent(paneId: String, kind: String, name: String) {
         val deadline = System.currentTimeMillis() + PANE_READY_TIMEOUT_MS
         val p = JsonObject().apply {
             addProperty("pane_id", paneId)

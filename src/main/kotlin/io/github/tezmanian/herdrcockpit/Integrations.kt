@@ -46,7 +46,7 @@ class IntegrationTable {
     private fun actions() = ProjectManager.getInstance().openProjects.firstOrNull()?.let { HerdrService.getInstance(it).actions }
 
     /** Runs `change` off the EDT, then reloads the list; the dialog is modal, so results come back in its modality. */
-    private fun load(change: ((HerdrActions) -> Unit)? = null) {
+    private fun load(change: ((BackendActions) -> Unit)? = null) {
         val a = actions() ?: return run { table.emptyText.text = "Open a project to see Herdr's integrations." }
         table.emptyText.text = "Loading…"
         val modality = ModalityState.stateForComponent(table)
@@ -61,7 +61,7 @@ class IntegrationTable {
         }
     }
 
-    private fun button(text: String, icon: Icon, needsRow: Boolean = true, run: (HerdrActions, Integration) -> Unit) =
+    private fun button(text: String, icon: Icon, needsRow: Boolean = true, run: (BackendActions, Integration) -> Unit) =
         object : DumbAwareAction(text, null, icon) {
             override fun update(e: AnActionEvent) { e.presentation.isEnabled = !needsRow || table.selectedObject != null }
             override fun actionPerformed(e: AnActionEvent) {

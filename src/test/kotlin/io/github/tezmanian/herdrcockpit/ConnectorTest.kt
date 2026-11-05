@@ -12,7 +12,7 @@ class ConnectorTest {
     fun readingBeforeTheFirstResizeDoesNotStartTheStream() {
         val ended = CopyOnWriteArrayList<String>()
         // A missing binary: starting the stream fails at once and reports it through onEnded.
-        val tty = HerdrTtyConnector("/nonexistent/herdr", "w1:p1", emptyMap(), "test") { ended += it }
+        val tty = HerdrTtyConnector({ _, _, _ -> listOf("/nonexistent/herdr") }, "w1:p1", emptyMap(), "test") { ended += it }
         val reader = Thread { tty.read(CharArray(16), 0, 16) }.apply { isDaemon = true; start() }
         Thread.sleep(500)
         assertEquals(emptyList<String>(), ended)

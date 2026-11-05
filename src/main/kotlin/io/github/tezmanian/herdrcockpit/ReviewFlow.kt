@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** What a review needs from HerdrService: the socket calls, the current snapshot, opening a pane, the log. */
 interface ReviewHost {
-    val actions: HerdrActions
+    val actions: BackendActions
     fun isConnected(): Boolean
     fun currentModel(): Model?
     fun showPane(paneId: String)

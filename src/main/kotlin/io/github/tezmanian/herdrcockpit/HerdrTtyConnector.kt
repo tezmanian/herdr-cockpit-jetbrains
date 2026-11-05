@@ -40,7 +40,8 @@ interface PaneHooks {
 }
 
 class HerdrTtyConnector(
-    private val binary: String,
+    /** The stream command for (observe, cols, rows): Backend.attachCommand. */
+    private val command: (Boolean, Int, Int) -> List<String>,
     private val paneId: String,
     private val env: Map<String, String>,
     private val displayName: String,
@@ -95,8 +96,7 @@ class HerdrTtyConnector(
             controlSince = System.currentTimeMillis()
             hooks?.claim()
         }
-        val how = if (observe) listOf("observe", paneId) else listOf("control", paneId, "--takeover")
-        val cmd = listOf(binary, "terminal", "session") + how + listOf("--cols", size.columns.toString(), "--rows", size.rows.toString())
+        val cmd = command(observe, size.columns, size.rows)
         val p = try {
             ProcessBuilder(cmd).apply {
                 environment().clear()

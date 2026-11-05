@@ -74,13 +74,15 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     private val loop = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-loop").apply { isDaemon = true } }
     private val activityExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-activity-loop").apply { isDaemon = true } }
     private val usageExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-usage-loop").apply { isDaemon = true } }
-    private val client = HerdrClient { socketPath() }
-    override val actions = HerdrActions(client)
+    /** The Herdr version this window talks to. */
+    private val herdr1 = Herdr1Backend(::binary, ::customSocket)
+    val backend: Backend = herdr1
+    override val actions: BackendActions get() = backend.actions
     val reviewFlow = ReviewFlow(project, this)
     private val manage = HerdrManage(project, this)
     fun sendToAgent(context: String, path: String?) = manage.sendToAgent(context, path)
     fun reviewChanges(files: List<String>, base: String, head: String) = reviewFlow.reviewChanges(files, base, head)
-    private val activity = ActivityWatcher(client)
+    private val activity get() = backend.activity()
     private val git = GitCache { scheduleRender() }
     private val logLines = ArrayDeque<String>()
 
@@ -133,7 +135,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     /** A pane's tab closed. The plugin's own closes drop it from `files` first; anything else was you. */
     private fun closedTab(f: HerdrPaneFile) {
         val mode = settings.closeTabInHerdr ?: "never"
-        if (mode == "never" || closing || files[f.paneId] !== f || f.ended || !isConnected()) return
+        if (mode == "never" || !has(Capability.structure) || closing || files[f.paneId] !== f || f.ended || !isConnected()) return
         val (space, pane) = model?.find(f.paneId) ?: return
         loop.execute { guard { manage.closedTabByUser(space, pane, mode) } }
     }
@@ -143,8 +145,11 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     // ---------- configuration ----------
     fun binary(): String = resolveBinary(settings.binaryPath)
     private fun customSocket(): String? = settings.socketPath?.takeIf { it.isNotBlank() }
-    fun socketPath(): String = resolveSocketPath(customSocket())
-    fun herdrEnvNow(): Map<String, String> = herdrEnv(customSocket()?.let { resolveSocketPath(it) })
+    /** Herdr 1's socket (claims, links, status bar, diagnostics). */
+    fun socketPath(): String = herdr1.socketPath()
+    fun herdrEnvNow(): Map<String, String> = backend.env()
+
+    fun has(c: Capability) = c in backend.capabilities
 
     override fun log(line: String) {
         LOG.info(line)
@@ -167,7 +172,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     /** Re-reads the snapshot until a pane Herdr just created shows up (normally right away). Not on the EDT. */
     fun awaitPane(paneId: String): Pair<Space, Pane>? {
         repeat(20) { i ->
-            runCatching { normalize(client.request("session.snapshot")).find(paneId) }.getOrNull()?.let {
+            runCatching { backend.snapshot().find(paneId) }.getOrNull()?.let {
                 scheduleRefresh(0)
                 return it
             }
@@ -203,8 +208,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     private fun refresh() {
         lastRefresh = System.currentTimeMillis()
         try {
-            val res = client.request("session.snapshot")
-            val next = normalize(res)
+            val next = backend.snapshot()
             val wasConnected = conn is Conn.Connected
             conn = Conn.Connected(next.version, next.protocol)
             failures = 0
@@ -214,14 +218,14 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
                 warnOutdatedIntegrations(next.version)
             }
             // Panes came or went: move the live subscription to the new set.
-            if (sub != null && next.paneIds().sorted().joinToString(" ") != subscribedPanes) startEvents()
+            if (sub != null && backend.subscriptionKey(next) != subscribedPanes) startEvents()
         } catch (e: Exception) {
             onFailure(e)
         }
     }
 
     private fun warnOutdatedIntegrations(version: String?) {
-        if (!integrationsChecked.add(version ?: "")) return
+        if (!has(Capability.integrations) || !integrationsChecked.add(version ?: "")) return
         val old = runCatching { actions.integrations() }.getOrElse { log("integration.list: ${it.message}"); return }.filter { it.state == "outdated" }
         if (old.isEmpty()) return
         herdrNotify(project, "Herdr's integration for ${old.joinToString(", ") { it.label }} is outdated. Update it in the settings.",
@@ -246,7 +250,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         lastDiagnosis = now
         val before = (c as? Conn.Down)?.d?.reason
         model = null
-        val d = diagnose(binary(), socketPath(), customSocket() != null, herdrEnvNow(), e)
+        val d = backend.diagnose(e)
         conn = Conn.Down(d)
         if (d.reason != before) log("herdr unavailable: ${d.reason.id}${d.detail?.let { " ($it)" } ?: ""}")
         if (c is Conn.Reconnecting) notify("Lost the connection to Herdr${d.detail?.let { ": $it" } ?: ""}.", NotificationType.WARNING)
@@ -254,8 +258,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     }
 
     private fun startEvents() {
-        val panes = model?.paneIds() ?: emptyList()
-        val key = panes.sorted().joinToString(" ")
+        val m = model
+        val key = backend.subscriptionKey(m)
         if (sub != null && key != subscribedPanes) {
             sub?.dispose() // dispose() doesn't call onEnd
             sub = null
@@ -263,7 +267,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         if (sub != null || conn !is Conn.Connected) return
         subscribedPanes = key
         var self: Subscription? = null
-        self = client.subscribe(subscriptionsFor(panes), { loop.execute { scheduleRefresh() } }) { err ->
+        self = backend.subscribe(m, { loop.execute { scheduleRefresh() } }) { err ->
             loop.execute {
                 if (sub !== self) return@execute
                 sub = null
@@ -641,11 +645,11 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             "openInstallDocs" -> BrowserUtil.browse("https://herdr.dev")
             "openSettings" -> ShowSettingsUtil.getInstance().showSettingsDialog(project, HerdrConfigurable::class.java)
             "copyDiagnostics" -> copyDiagnostics()
-            "newSpace" -> manage.newSpace()
-            "newTab" -> m?.space(spaceId)?.let { manage.newTab(it) }
-            "review" -> m?.space(spaceId)?.let { reviewFlow.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
-            "splitRight", "splitDown" -> m?.find(paneId)?.let { (s, p) -> manage.split(s, p, right = command == "splitRight") }
-            "zoom" -> m?.find(paneId)?.let { manage.toggleZoom(it.second) }
+            "newSpace" -> if (has(Capability.structure)) manage.newSpace()
+            "newTab" -> if (has(Capability.structure)) m?.space(spaceId)?.let { manage.newTab(it) }
+            "review" -> if (has(Capability.agentPrompt)) m?.space(spaceId)?.let { reviewFlow.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
+            "splitRight", "splitDown" -> if (has(Capability.structure)) m?.find(paneId)?.let { (s, p) -> manage.split(s, p, right = command == "splitRight") }
+            "zoom" -> if (has(Capability.structure)) m?.find(paneId)?.let { manage.toggleZoom(it.second) }
             "menu" -> m?.space(spaceId)?.let { manage.menu(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "setupClaudeUsage" -> manage.setUpClaudeUsage()
             "setKiroCredits" -> manage.setKiroCredits()
@@ -700,7 +704,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     private fun ensureProjectSpace(focus: Boolean = false) {
         val base = project.basePath ?: return
         runCatching {
-            val spaces = normalize(client.request("session.snapshot")).spaces
+            val spaces = backend.snapshot().spaces
             val folders = if (settings.spacePerProject) projectFolders() else if (focus || spaces.isEmpty()) listOf(base) else emptyList()
             // shortcut: matches on the first pane's current cwd, so a space whose shell left the project gets a twin; upgrade if that annoys
             var baseId = projectSpace(spaces, base)?.id
@@ -784,11 +788,10 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
 
     override fun dispose() {
         sub?.dispose()
-        client.dispose()
+        backend.dispose()
         loop.shutdownNow()
         activityExec.shutdownNow()
         usageExec.shutdownNow()
-        activity.shutdown()
         git.shutdown()
         for (f in files.values) f.connector?.close()
     }

@@ -350,6 +350,8 @@ findings unpublished). The send flow, the Review servers table, tokens and the d
 
 | File | Role |
 |---|---|
+| `Backend.kt` | The boundary to the Herdr version: `Backend`, `BackendActions`, `Capability` (what the UI may offer) |
+| `Herdr1Backend.kt` | Herdr 1: snapshot, event subscription, diagnosis and the pane stream command, over `HerdrClient` |
 | `HerdrClient.kt` | NDJSON over the Unix socket: `request()` (one short connection per call), `subscribe()` |
 | `Model.kt` | `normalize()`: flat `session.snapshot` → Space → Tab → Pane |
 | `Connection.kt` | finding `herdr`, `diagnose()`, `startServer()` (detached, clean env), backoff |
