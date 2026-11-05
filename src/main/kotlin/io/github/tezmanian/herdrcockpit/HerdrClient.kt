@@ -100,7 +100,8 @@ private fun errorOf(msg: JsonObject): HerdrError? {
     return HerdrError(e.get("code")?.asString ?: "error", e.get("message")?.asString ?: "unknown error")
 }
 
-class HerdrClient(private val socketPath: () -> String) {
+/** `errors` turns a reply's `error` into an exception (Herdr 1 and herdr-core encode the stable code differently). */
+class HerdrClient(private val errors: (JsonObject) -> HerdrError? = ::errorOf, private val socketPath: () -> String) {
     // Closes sockets whose request ran out of time (blocking channels have no read timeout).
     private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-timeouts").apply { isDaemon = true } }
     // Requests in flight, so dispose() can end long waits (agent.wait) instead of leaving them to their timeout.
@@ -135,7 +136,7 @@ class HerdrClient(private val socketPath: () -> String) {
                 val msg = parseLine(line.trim()) ?: continue
                 val mid = msg.get("id")?.takeIf { it.isJsonPrimitive }?.asString
                 if (mid != id && mid != "") continue
-                errorOf(msg)?.let { throw it }
+                errors(msg)?.let { throw it }
                 val result = msg.get("result")
                 return if (result != null && result.isJsonObject) result.asJsonObject else JsonObject()
             }
@@ -160,25 +161,36 @@ class HerdrClient(private val socketPath: () -> String) {
      * events as "something changed, re-read" signals (what Herdr's docs recommend). onEnd fires once on
      * close or error, but not after dispose().
      */
-    fun subscribe(subscriptions: List<JsonObject>, onEvent: (JsonObject) -> Unit, onEnd: (Exception?) -> Unit): Subscription {
+    fun subscribe(subscriptions: List<JsonObject>, onEvent: (JsonObject) -> Unit, onEnd: (Exception?) -> Unit): Subscription =
+        subscribe(JsonObject().apply { add("subscriptions", com.google.gson.JsonArray().apply { subscriptions.forEach { add(it) } }) }, null, onEvent, onEnd)
+
+    /** `events.subscribe` with these params. With `idleMs`, no line for that long ends it with a timeout (a stream that went quiet). */
+    fun subscribe(params: JsonObject, idleMs: Long?, onEvent: (JsonObject) -> Unit, onEnd: (Exception?) -> Unit): Subscription {
         val id = nextId("sub")
         val disposed = AtomicBoolean(false)
         // Closed from the caller's thread by dispose().
         val channel = java.util.concurrent.atomic.AtomicReference<Conn?>()
+        val lastLine = AtomicLong(System.currentTimeMillis())
+        val idle = AtomicBoolean(false)
+        val watch = idleMs?.let { ms ->
+            timer.scheduleWithFixedDelay({
+                if (System.currentTimeMillis() - lastLine.get() > ms) { idle.set(true); runCatching { channel.get()?.close() } }
+            }, maxOf(1, ms / 4), maxOf(1, ms / 4), TimeUnit.MILLISECONDS)
+        }
         val thread = Thread({
             var err: Exception? = null
             try {
                 val ch = open(socketPath())
                 channel.set(ch)
                 if (disposed.get()) { ch.close(); return@Thread }
-                val params = JsonObject().apply { add("subscriptions", com.google.gson.JsonArray().apply { subscriptions.forEach { add(it) } }) }
                 ch.send(JsonObject().apply { addProperty("id", id); addProperty("method", "events.subscribe"); add("params", params) })
                 val reader = ch.lines()
                 var acked = false
                 while (true) {
                     val line = reader.readLine() ?: break
+                    lastLine.set(System.currentTimeMillis())
                     val msg = parseLine(line.trim()) ?: continue
-                    errorOf(msg)?.let { throw it }
+                    errors(msg)?.let { throw it }
                     if (!acked && msg.get("id")?.takeIf { it.isJsonPrimitive }?.asString == id && msg.has("result")) {
                         acked = true
                         continue
@@ -188,14 +200,17 @@ class HerdrClient(private val socketPath: () -> String) {
             } catch (e: Exception) {
                 err = e
             } finally {
+                watch?.cancel(false)
                 runCatching { channel.get()?.close() }
             }
+            if (idle.get() && !disposed.get()) err = HerdrError("timeout", "no event or heartbeat for ${idleMs!! / 1000}s")
             if (!disposed.get()) onEnd(err)
         }, "herdr-events")
         thread.isDaemon = true
         thread.start()
         return Subscription {
             disposed.set(true)
+            watch?.cancel(false)
             runCatching { channel.get()?.close() }
         }
     }

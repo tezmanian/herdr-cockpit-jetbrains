@@ -56,8 +56,17 @@ tasks.jar {
 }
 
 tasks.runIde {
+    // Point the sandbox IDE at a throwaway herdr-core (Herdr 2): -PcoreSocket=<its socket>. Inherited HC_*/HERDR_*
+    // variables (from a Herdr pane or an hc terminal) may point at your live session; without -PherdrSocket, Herdr 1's
+    // socket points nowhere, so Automatic can't find a real Herdr 1.
+    val herdrSocket = providers.gradleProperty("herdrSocket").orNull
+    providers.gradleProperty("coreSocket").orNull?.let { sock ->
+        environment("HC_SOCKET", sock)
+        listOf("HC_SESSION", "HC_TERMINAL_ID", "HERDR_SOCKET_PATH", "HERDR_SESSION").forEach { environment.remove(it) }
+        if (herdrSocket == null) environment("HERDR_SOCKET_PATH", "/nonexistent/herdr-cockpit-sandbox.sock")
+    }
     // Point the sandbox IDE at a throwaway Herdr session: -PherdrSocket=~/.config/herdr/sessions/<name>/herdr.sock
-    providers.gradleProperty("herdrSocket").orNull?.let { sock ->
+    herdrSocket?.let { sock ->
         environment("HERDR_SOCKET_PATH", sock)
         Regex("""/sessions/([^/]+)/herdr\.sock$""").find(sock)?.let { environment("HERDR_SESSION", it.groupValues[1]) }
     }

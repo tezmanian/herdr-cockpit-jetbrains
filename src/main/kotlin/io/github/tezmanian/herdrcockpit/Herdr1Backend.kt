@@ -4,7 +4,7 @@ package io.github.tezmanian.herdrcockpit
 
 class Herdr1Backend(private val binary: () -> String, private val customSocket: () -> String?) : Backend {
     private val client = HerdrClient { socketPath() }
-    private val watcher = ActivityWatcher(client)
+    private val watcher = ActivityWatcher(herdr1Read(client))
 
     override val kind = BackendKind.HERDR1
     override val capabilities: Set<Capability> = Capability.entries.toSet() - Capability.seenMarkers - Capability.pins

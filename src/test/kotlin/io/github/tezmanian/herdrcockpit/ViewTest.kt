@@ -93,6 +93,12 @@ class ViewTest {
         assertEquals(0, sp("w8").getAsJsonArray("agents").size())
         assertEquals(0, vs.getAsJsonArray("attention").size())
         assertTrue(view(model, false).getAsJsonArray("spaces").all { it.asJsonObject.getAsJsonArray("shells").isEmpty })
+        // Herdr 1 pins nothing: agents and shells keep Herdr's order.
+        for (space in model.spaces) {
+            fun ids(kind: String) = sp(space.id).getAsJsonArray(kind).map { it.asJsonObject.get("id").asString }
+            assertEquals(space.agents.map { it.id }, ids("agents"))
+            assertEquals(space.panes.filter { !it.isAgent }.map { it.id }, ids("shells"))
+        }
     }
 
     @Test

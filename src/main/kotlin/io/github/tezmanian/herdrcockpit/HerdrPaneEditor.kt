@@ -1,5 +1,6 @@
 // Each Herdr pane opens as an editor tab holding a JediTerm terminal that streams the pane (see
 // HerdrTtyConnector). Closing the tab only detaches: the program keeps running in Herdr.
+// A Herdr 2 terminal opens as CorePaneEditor instead: `hc attach` in a PTY.
 // The Herdr TUI itself (`herdr` in a real PTY) opens the same way as HerdrTuiFile.
 package io.github.tezmanian.herdrcockpit
 
@@ -33,6 +34,7 @@ import com.intellij.ui.JBColor
 import com.jediterm.core.util.TermSize
 import com.jediterm.terminal.ProcessTtyConnector
 import com.jediterm.terminal.TerminalCopyPasteHandler
+import com.jediterm.terminal.TtyConnector
 import com.jediterm.terminal.model.StyleState
 import com.jediterm.terminal.model.TerminalSelection
 import com.jediterm.terminal.model.TerminalSelectionChangesListener
@@ -42,6 +44,7 @@ import com.jediterm.terminal.model.hyperlinks.LinkInfo
 import com.jediterm.terminal.model.hyperlinks.LinkResult
 import com.jediterm.terminal.model.hyperlinks.LinkResultItem
 import com.jediterm.terminal.ui.settings.SettingsProvider
+import com.pty4j.PtyProcess
 import com.pty4j.PtyProcessBuilder
 import com.pty4j.WinSize
 import java.awt.BorderLayout
@@ -59,10 +62,13 @@ import javax.swing.JPanel
 import javax.swing.Timer
 import javax.swing.TransferHandler
 
-/** A pane's tab. Not a real file: the editor provider below draws it. */
-class HerdrPaneFile(val paneId: String, val spaceId: String, var title: String, val agent: Boolean) :
+/** A pane's tab. Not a real file: the editor provider below draws it. `core`: a Herdr 2 terminal. */
+class HerdrPaneFile(val paneId: String, val spaceId: String, var title: String, val agent: Boolean, val core: Boolean = false) :
     LightVirtualFile(title, PlainTextFileType.INSTANCE, "") {
     @Volatile var connector: HerdrTtyConnector? = null
+    /** Herdr 2: its `hc attach` tab is open, and whether that ended. */
+    @Volatile var coreOpen = false
+    @Volatile var coreEnded = false
     /** Opened by following Herdr: watch a pane another window holds instead of taking it. */
     var polite = false
 
@@ -73,7 +79,9 @@ class HerdrPaneFile(val paneId: String, val spaceId: String, var title: String, 
     }
 
     /** The stream ended without the tab being closed: the tab only shows a note. */
-    val ended: Boolean get() = connector?.isEnded == true
+    val ended: Boolean get() = connector?.isEnded == true || coreEnded
+    /** The tab shows the pane live. */
+    val streaming: Boolean get() = connector != null || coreOpen
 
     override fun getPath(): String = "herdr://$paneId"
 }
@@ -92,7 +100,7 @@ class HerdrPaneEditorProvider : FileEditorProvider, DumbAware {
     override fun createEditor(project: Project, file: VirtualFile): FileEditor = when (file) {
         is HerdrTuiFile -> HerdrTuiEditor(project, file)
         is HerdrHelpFile -> HerdrHelpEditor(project, file)
-        else -> HerdrPaneEditor(project, file as HerdrPaneFile)
+        else -> (file as HerdrPaneFile).let { if (it.core) CorePaneEditor(project, it) else HerdrPaneEditor(project, it) }
     }
     override fun getEditorTypeId() = "herdr-pane"
     override fun getPolicy() = FileEditorPolicy.HIDE_DEFAULT_EDITOR
@@ -582,6 +590,103 @@ class HerdrTuiEditor(project: Project, private val file: HerdrTuiFile) : UserDat
     override fun removePropertyChangeListener(listener: PropertyChangeListener) {}
     override fun getFile(): VirtualFile = file
     override fun dispose() { proc.destroy() }
+}
+
+/**
+ * A Herdr 2 terminal: `hc attach <t>` in a PTY. Closing the tab ends only `hc attach`, which detaches; the program
+ * keeps running in herdr-core. When the attach ends (the terminal finished, or it's recovering) a note stays.
+ */
+class CorePaneEditor(project: Project, private val file: HerdrPaneFile) : UserDataHolderBase(), FileEditor {
+    private val widget = JBTerminalWidget(project, JBTerminalSystemSettingsProviderBase(), this)
+    private val connector: AttachConnector
+
+    init {
+        val service = HerdrService.getInstance(project)
+        var startError: String? = null
+        val proc = runCatching {
+            PtyProcessBuilder(service.backend.attachCommand(file.paneId, false, 120, 32).toTypedArray())
+                .setEnvironment(service.herdrEnvNow() + ("TERM" to "xterm-256color"))
+                .setInitialColumns(120).setInitialRows(32)
+                .start()
+        }.onFailure { startError = it.message; service.log("pane ${file.paneId}: couldn't start hc attach: ${it.message}") }.getOrNull()
+        connector = AttachConnector(proc, file.title, startError) {
+            file.coreEnded = true
+            service.log("pane ${file.paneId}: attach ended")
+            service.scheduleRender()
+        }
+        file.coreEnded = false
+        file.coreOpen = true
+        widget.start(connector)
+        acceptFileDrops(widget)
+    }
+
+    override fun getComponent(): JComponent = widget
+    override fun getPreferredFocusedComponent(): JComponent = widget.preferredFocusableComponent
+    override fun getName() = "Herdr"
+    override fun setState(state: FileEditorState) {}
+    override fun isModified() = false
+    override fun isValid() = true
+    override fun addPropertyChangeListener(listener: PropertyChangeListener) {}
+    override fun removePropertyChangeListener(listener: PropertyChangeListener) {}
+    override fun getFile(): VirtualFile = file
+
+    override fun dispose() {
+        connector.close()
+        file.coreOpen = false
+    }
+}
+
+/** `hc attach`'s PTY; after it ends, a note instead of closing the widget (JediTerm closes it on -1). */
+private class AttachConnector(private val proc: PtyProcess?, private val displayName: String, private val startError: String?, private val onEnded: () -> Unit) : TtyConnector {
+    private val reader = proc?.inputStream?.let { java.io.InputStreamReader(it, Charsets.UTF_8) }
+    @Volatile private var closed = false
+    private val closedLatch = java.util.concurrent.CountDownLatch(1)
+    private var note: CharArray? = null
+    private var notePos = 0
+
+    override fun read(buf: CharArray, offset: Int, length: Int): Int {
+        if (note == null) {
+            val n = runCatching { reader?.read(buf, offset, length) ?: -1 }.getOrDefault(-1)
+            if (n >= 0 || closed) return n
+            val why = if (startError != null) "Couldn't start hc attach: $startError. Check the hc binary in the settings."
+                else "The terminal stream ended. Click it in the Herdr sidebar to open it again; if hc said it is unavailable, it is recovering: try again in a moment."
+            note = "\u001b[0m\r\n\u001b[2m[Herdr Cockpit] $why\u001b[0m\r\n".toCharArray()
+            onEnded()
+        }
+        val text = note!!
+        if (notePos < text.size) {
+            val n = minOf(length, text.size - notePos)
+            System.arraycopy(text, notePos, buf, offset, n)
+            notePos += n
+            return n
+        }
+        // Keep the note on screen; JediTerm interrupts this thread when the tab closes.
+        while (!closed) try { Thread.sleep(200) } catch (_: InterruptedException) { return -1 }
+        return -1
+    }
+
+    override fun write(bytes: ByteArray) {
+        val p = proc?.takeIf { it.isAlive } ?: return
+        runCatching { p.outputStream.write(bytes); p.outputStream.flush() }
+    }
+
+    override fun write(string: String) = write(string.toByteArray(Charsets.UTF_8))
+    override fun resize(termSize: TermSize) { proc?.takeIf { it.isAlive }?.winSize = WinSize(maxOf(1, termSize.columns), maxOf(1, termSize.rows)) }
+    override fun isConnected() = !closed
+    /** Until the tab closes, not until hc exits: the note stays readable. */
+    override fun waitFor(): Int {
+        closedLatch.await()
+        return 0
+    }
+    override fun ready(): Boolean = runCatching { reader?.ready() == true }.getOrDefault(false)
+    override fun getName() = displayName
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        closedLatch.countDown()
+        proc?.destroy()
+    }
 }
 
 class HerdrPaneTabTitleProvider : EditorTabTitleProvider, DumbAware {

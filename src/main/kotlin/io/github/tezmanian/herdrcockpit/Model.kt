@@ -36,6 +36,8 @@ data class Pane(
     val paneLabel: String?,
     val displayAgent: String?,
     val agentName: String?,
+    /** Pinned in Herdr 2 (`herdr.pinned`): sorts first among the agents. Herdr 1 has no pins. */
+    val pinned: Boolean = false,
 )
 
 data class Tab(val id: String, val workspaceId: String, val label: String, val panes: MutableList<Pane> = mutableListOf())
@@ -63,8 +65,12 @@ data class Model(val spaces: List<Space>, val focusedSpaceId: String?, val versi
     }
     fun space(id: String?): Space? = spaces.firstOrNull { it.id == id }
 
-    /** The snapshot records behind a pane (its pane and agent record) or, without a pane, a space. */
+    /** The records behind a pane (Herdr 1: its pane and agent record; Herdr 2: its terminal) or, without a pane, a space. */
     fun rawOf(spaceId: String?, paneId: String?): JsonObject? {
+        raw.get("terminals")?.takeIf { it.isJsonArray }?.asJsonArray?.let { ts ->
+            if (paneId != null) return ts.firstOrNull { it.isJsonObject && it.asJsonObject.s("address") == paneId }?.asJsonObject?.deepCopy()
+            return raw.obj("doc")?.obj("value")?.arr("spaces")?.firstOrNull { it.s("id") == spaceId }?.deepCopy()
+        }
         val s = raw.obj("snapshot") ?: return null
         fun pick(arr: String, key: String, id: String?) = s.arr(arr)?.firstOrNull { it.s(key) == id }
         if (paneId == null) return pick("workspaces", "workspace_id", spaceId)

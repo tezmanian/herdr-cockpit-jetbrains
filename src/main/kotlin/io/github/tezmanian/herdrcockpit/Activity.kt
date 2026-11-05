@@ -147,8 +147,22 @@ fun parseProcInfo(r: JsonObject): ProcInfo? {
     return ProcInfo(info.get("foreground_process_group_id")?.takeIf { it.isJsonPrimitive }?.asLong, procs)
 }
 
-/** Polls pane.process_info / pane.read for the given panes and remembers what it saw. */
-class ActivityWatcher(private val client: HerdrClient) {
+/** A pane's foreground process (shells only) and its recent screen text, from the backend. */
+typealias ActivityRead = (ActivityTarget) -> Pair<ProcInfo?, String>
+
+/** Herdr 1: pane.process_info and pane.read. */
+fun herdr1Read(client: HerdrClient): ActivityRead = { t ->
+    val info = if (!t.agent) parseProcInfo(client.request("pane.process_info", JsonObject().apply { addProperty("pane_id", t.paneId) })) else null
+    val read = client.request("pane.read", JsonObject().apply {
+        addProperty("pane_id", t.paneId)
+        addProperty("source", if (t.agent) "detection" else "recent_unwrapped")
+        addProperty("lines", if (t.agent) 60 else 40)
+    })
+    info to (read.getAsJsonObject("read")?.get("text")?.asString ?: "")
+}
+
+/** Polls what [read] reports for the given panes and remembers what it saw. */
+class ActivityWatcher(private val read: ActivityRead) {
     private class Seen(val activity: PaneActivity, val sig: String)
 
     private val byPane = ConcurrentHashMap<String, Seen>()
@@ -173,13 +187,7 @@ class ActivityWatcher(private val client: HerdrClient) {
     }
 
     private fun pollOne(t: ActivityTarget): Boolean = try {
-        val info = if (!t.agent) parseProcInfo(client.request("pane.process_info", JsonObject().apply { addProperty("pane_id", t.paneId) })) else null
-        val read = client.request("pane.read", JsonObject().apply {
-            addProperty("pane_id", t.paneId)
-            addProperty("source", if (t.agent) "detection" else "recent_unwrapped")
-            addProperty("lines", if (t.agent) 60 else 40)
-        })
-        val text = read.getAsJsonObject("read")?.get("text")?.asString ?: ""
+        val (info, text) = read(t)
         val summary = if (!t.agent) summarizeShell(info, text) else PaneActivity(output = summarizeAgent(text, t.status ?: AgentStatus.unknown))
         val prev = byPane[t.paneId]
         // The read revision isn't populated, so detect output changes by content.

@@ -140,6 +140,7 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
     /** Pick another agent (any space), write what it should do; the prompt says where the work came from. */
     fun handOff(space: Space, pane: Pane) {
         if (!connected()) return
+        if (!has(Capability.agentPrompt)) return notify("Handing off to an agent needs Herdr 1.", NotificationType.INFORMATION)
         val from = editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane)
         val targets = service.currentModel()?.spaces.orEmpty().flatMap { s -> s.agents.filter { it.id != pane.id }.map { s to it } }
         if (targets.isEmpty()) return notify("No other agent in Herdr to hand off to.", NotificationType.INFORMATION)
@@ -165,6 +166,7 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
     /** Code or files from the IDE to an agent:agents in the space holding `path` first, the dialog starts with `context`. */
     fun sendToAgent(context: String, path: String?) {
         if (!connected()) return
+        if (!has(Capability.agentPrompt)) return notify("Sending to an agent needs Herdr 1.", NotificationType.INFORMATION)
         val spaces = service.currentModel()?.spaces.orEmpty()
         val targets = spaces.flatMap { s -> s.agents.map { s to it } }
             .sortedByDescending { (s, _) -> val cwd = s.cwd; path != null && cwd != null && (path == cwd || path.startsWith(cwd.trimEnd('/') + "/")) }

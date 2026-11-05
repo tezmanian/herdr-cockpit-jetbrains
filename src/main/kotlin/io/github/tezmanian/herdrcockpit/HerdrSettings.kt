@@ -27,8 +27,14 @@ import com.intellij.ui.dsl.builder.panel
 class HerdrSettingsState : BaseState() {
     /** Path to the herdr binary; empty = look in the usual install folders, then PATH. */
     var binaryPath by string("")
-    /** Herdr socket; empty = HERDR_SOCKET_PATH, HERDR_SESSION or ~/.config/herdr/herdr.sock. */
+    /** Herdr socket; empty = HERDR_SOCKET_PATH, HERDR_SESSION or ~/.config/herdr/herdr.sock. Herdr 1 only, like binaryPath. */
     var socketPath by string("")
+    /** Which Herdr: "auto" (Herdr 1 when it answers, else Herdr 2), "herdr1" or "herdr2"; anything else counts as auto. */
+    var herdrVersion by string("auto")
+    /** Herdr 2's `hc`; empty = the usual install folders, then PATH. */
+    var hcPath by string("")
+    /** herdr-core's socket; empty = HC_SOCKET, else the core's default session socket. */
+    var coreSocketPath by string("")
     /** When Herdr's focused space changes, switch here too (only in projects you switched from the IDE). */
     var followMode by property(true)
     /** Switching a space opens a tab for every pane. */
@@ -129,10 +135,23 @@ class HerdrSettings : SimplePersistentStateComponent<HerdrSettingsState>(HerdrSe
     }
 }
 
+private val VERSIONS = linkedMapOf("auto" to "Automatic", "herdr1" to "Herdr 1", "herdr2" to "Herdr 2 (experimental)")
+
 class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
     override fun createPanel(): DialogPanel {
         val s = HerdrSettings.get()
+        // The settings that act only with Herdr 1 are greyed out while a window uses Herdr 2.
+        val herdr2 = ProjectManager.getInstance().openProjects.any { !it.isDisposed && HerdrService.getInstance(it).backend.kind == BackendKind.HERDR2 }
+        val herdr1Only = "Herdr 1 only: not used with Herdr 2."
         return panel {
+            group("Herdr version") {
+                row("Herdr version:") {
+                    comboBox(VERSIONS.values.toList()).bindItem({ VERSIONS[s.herdrVersion] ?: VERSIONS.getValue("auto") },
+                        { label -> s.herdrVersion = VERSIONS.entries.firstOrNull { it.value == label }?.key ?: "auto" })
+                        .applyToComponent { prototypeDisplayValue = VERSIONS.values.maxBy { it.length } + "  " }
+                        .comment("Automatic: Herdr 1 when it answers, else Herdr 2. Herdr 2 support is experimental: the sidebar mirrors the Herdr app's window and opens its terminals; spaces, tabs and panes are made in the app.")
+                }
+            }
             group("Connection") {
                 row("herdr binary:") {
                     textField().bindText({ s.binaryPath ?: "" }, { s.binaryPath = it }).columns(COLUMNS_LARGE)
@@ -141,6 +160,15 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                 row("Socket:") {
                     textField().bindText({ s.socketPath ?: "" }, { s.socketPath = it }).columns(COLUMNS_LARGE)
                         .comment("Empty: HERDR_SOCKET_PATH, HERDR_SESSION, else ~/.config/herdr/herdr.sock. A …/sessions/&lt;name&gt;/herdr.sock path selects that session.")
+                }
+            }
+            group("Herdr 2 (experimental)") {
+                row("hc binary:") {
+                    textField().bindText({ s.hcPath ?: "" }, { s.hcPath = it }).columns(COLUMNS_LARGE).comment("Empty: hc on PATH.")
+                }
+                row("Core socket:") {
+                    textField().bindText({ s.coreSocketPath ?: "" }, { s.coreSocketPath = it }).columns(COLUMNS_LARGE)
+                        .comment("Wins over HC_SOCKET. Empty: HC_SOCKET, else herdr-core's default session socket.")
                 }
             }
             group("Review servers") {
@@ -160,14 +188,16 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
             group("Starting Herdr") {
                 row { checkBox("Create a space for every project in the window").bindSelected(s::spacePerProject)
                     .comment("When you start Herdr or open the TUI: the project and the ones attached to it, each in its folder, if it has no space yet. Spaces are never closed for you.") }
-            }
+                if (herdr2) row { comment(herdr1Only) }
+            }.enabled(!herdr2)
             group("Switching spaces") {
                 row { checkBox("Add the space's folder as a content root").bindSelected(s::mountOnSwitch) }
                 row { checkBox("Open a tab for every pane").bindSelected(s::autoAttachOnSwitch) }
                 row { checkBox("Include shell panes").bindSelected(s::autoAttachShells) }
                 row { checkBox("Close the tabs of other spaces (they only detach)").bindSelected(s::closeTerminalsOnSwitch) }
                 row { checkBox("Follow Herdr's focus (in projects you switched from the IDE)").bindSelected(s::followMode) }
-            }
+                if (herdr2) row { comment(herdr1Only) }
+            }.enabled(!herdr2)
             group("Sidebar and notifications") {
                 row("Order of spaces:") {
                     comboBox(listOf("activity", "herdr")).bindItem({ s.spaceOrder ?: "activity" }, { s.spaceOrder = it ?: "activity" })
@@ -189,7 +219,8 @@ class HerdrConfigurable : BoundConfigurable("Herdr Cockpit") {
                     comboBox(listOf("never", "ask", "always")).bindItem({ s.closeTabInHerdr ?: "never" }, { s.closeTabInHerdr = it ?: "never" })
                         .comment("never: only detaches, the pane keeps running in Herdr. ask: closes idle shells in Herdr too, asks for agents and busy shells. always: closes it in Herdr. The last pane of a space always asks.")
                 }
-            }
+                if (herdr2) row { comment(herdr1Only) }
+            }.enabled(!herdr2)
             group("Prompts") {
                 val table = promptTable()
                 row {

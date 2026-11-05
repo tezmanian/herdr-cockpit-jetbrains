@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.41
+- Herdr 2 (experimental): with herdr-core and the Herdr app, the sidebar mirrors the app's window (spaces, tabs,
+  terminals, the names the app shows, agent status) and updates on its own, and a terminal opens as an editor tab
+  through `hc attach`. Spaces, tabs and panes are made in the app; the actions Herdr 2 lacks are not offered.
+  The new setting *Herdr version* (Automatic, Herdr 1, Herdr 2) picks one; Automatic prefers Herdr 1 and says once
+  when Herdr 2 runs too. Switching it reconnects without a restart; pane tabs only detach. (tez/herdr-cockpit#70)
+
 ## 0.1.40
 - Internal: the Herdr calls go through one backend boundary, preparing a second backend for Herdr 2
   (tez/herdr-cockpit#70). No visible change.

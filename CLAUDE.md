@@ -32,6 +32,11 @@ HERDR_LIVE_SOCKET=~/.config/herdr/sessions/hcjb/herdr.sock ./gradlew test --test
 ./gradlew runIde -PherdrSocket=$HOME/.config/herdr/sessions/hcjb/herdr.sock -PopenProject=/path/to/project
 ```
 
+Herdr 2 the same way: never the user's own herdr-core or Herdr app. Use a core in its own folders (`XDG_*`,
+`HC_SESSION`, `HERDR_APP_HOME`; README "Live test and sandbox IDE") and pass its socket explicitly:
+`HC_LIVE_SOCKET=<socket> ./gradlew test --tests '*CoreLiveTest*'` and `./gradlew runIde -PcoreSocket=<socket>`. Inside
+an hc terminal, `HC_SOCKET` points at the live core.
+
 Never start real agents (`agent.start`) in tests: they cost money and use the user's account.
 
 ## Architecture
@@ -39,9 +44,10 @@ Never start real agents (`agent.start`) in tests: they cost money and use the us
 Package `io.github.tezmanian.herdrcockpit`. The README's "Layout" table lists the role of each file.
 
 **Backends:** everything that depends on the Herdr version sits behind `Backend` (Backend.kt): snapshot, event
-subscription, diagnosis, the pane stream command and the actions (`BackendActions`). `HerdrService.backend` is a
-`Herdr1Backend` today; a Herdr 2 backend is planned (tez/herdr-cockpit#70). The UI offers only what
-`backend.capabilities` lists (`HerdrService.has(...)`). Backend files have no IntelliJ imports; settings come in as
+subscription, diagnosis, the pane stream command and the actions (`BackendActions`). `HerdrService.backend` is
+`Herdr1Backend` or `Herdr2Backend` (experimental; herdr-core plus the Herdr app's layout document, read-only apart
+from attach), chosen by the `herdrVersion` setting on every connect (`chooseBackend()`). The UI offers only what
+`backend.capabilities` lists (`HerdrService.has(...)`); `BackendActions` methods outside them throw `Unsupported`. Backend files have no IntelliJ imports; settings come in as
 functions.
 
 **Data flow (Herdr → UI):** `HerdrClient` speaks NDJSON over the socket. `request()` opens one short connection per

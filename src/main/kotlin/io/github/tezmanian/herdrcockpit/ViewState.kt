@@ -186,7 +186,8 @@ fun buildViewState(i: ViewInputs): JsonObject {
     for (sp in if (i.order == "herdr") all else orderByActivity(all, i.lastActive)) {
         val agents = JsonArray()
         val shells = JsonArray()
-        for (tab in sp.tabs) for (p in tab.panes) {
+        // Pinned agents first, otherwise in Herdr's order (a stable sort).
+        for ((tab, p) in sp.tabs.flatMap { t -> t.panes.map { t to it } }.sortedBy { !(it.second.isAgent && it.second.pinned) }) {
             if (p.isAgent) {
                 val v = agentView(sp, tab, p, i)
                 agents.add(v)

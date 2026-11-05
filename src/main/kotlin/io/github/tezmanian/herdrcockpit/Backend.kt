@@ -40,40 +40,60 @@ interface Backend {
     fun dispose()
 }
 
-/** HerdrActions' surface. Methods a backend lacks throw [Unsupported]. */
+/** HerdrActions' surface. A backend lacking a method's capability keeps its default, which throws [Unsupported]. */
 interface BackendActions {
-    fun createTab(workspaceId: String, cwd: String?, label: String?): Created
-    fun createSpace(cwd: String, label: String?): Created
-    fun splitPane(paneId: String, right: Boolean, cwd: String?): Created
-    fun toggleZoom(paneId: String): Boolean
-    fun paneScroll(paneId: String): PaneScroll
-    fun scrollPaneTo(paneId: String, offset: Int): PaneScroll
-    fun paneRevision(paneId: String): Long
-    fun paneHistory(paneId: String, cols: Int): String
-    fun focusSpace(workspaceId: String)
-    fun focusAgent(paneId: String)
-    fun createWorktreeSpace(workspaceId: String, branch: String, label: String?): Created
-    fun renameTab(tabId: String, label: String)
-    fun renameSpace(workspaceId: String, label: String)
-    fun renamePane(paneId: String, label: String?)
-    fun renameAgent(paneId: String, name: String?)
-    fun promptAgent(paneId: String, text: String)
-    fun promptAndWait(paneId: String, text: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus
-    fun waitAgent(paneId: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus
-    fun sendKeys(paneId: String, keys: List<String>)
-    fun paneKeys(paneId: String, keys: List<String>)
-    fun integrations(): List<Integration>
-    fun installIntegration(target: String)
-    fun uninstallIntegration(target: String)
-    fun readAgent(paneId: String): String
-    fun processInfo(paneId: String): ProcInfo?
-    fun closePane(paneId: String)
-    fun closeTab(tabId: String)
-    fun closeSpace(workspaceId: String, group: Boolean = false)
-    fun removeWorktree(workspaceId: String, force: Boolean = false)
-    fun startAgent(paneId: String, kind: String, name: String)
+    fun createTab(workspaceId: String, cwd: String?, label: String?): Created = unsupported(Capability.structure)
+    fun createSpace(cwd: String, label: String?): Created = unsupported(Capability.structure)
+    fun splitPane(paneId: String, right: Boolean, cwd: String?): Created = unsupported(Capability.structure)
+    fun toggleZoom(paneId: String): Boolean = unsupported(Capability.structure)
+    fun paneScroll(paneId: String): PaneScroll = unsupported(Capability.paneFind)
+    fun scrollPaneTo(paneId: String, offset: Int): PaneScroll = unsupported(Capability.paneFind)
+    fun paneRevision(paneId: String): Long = unsupported(Capability.paneFind)
+    fun paneHistory(paneId: String, cols: Int): String = unsupported(Capability.paneFind)
+    /** Focus in the Herdr window counts as structure: Herdr 2 keeps focus per screen. */
+    fun focusSpace(workspaceId: String): Unit = unsupported(Capability.structure)
+    fun focusAgent(paneId: String): Unit = unsupported(Capability.structure)
+    fun createWorktreeSpace(workspaceId: String, branch: String, label: String?): Created = unsupported(Capability.worktrees)
+    fun renameTab(tabId: String, label: String): Unit = unsupported(Capability.structure)
+    fun renameSpace(workspaceId: String, label: String): Unit = unsupported(Capability.structure)
+    fun renamePane(paneId: String, label: String?): Unit = unsupported(Capability.structure)
+    fun renameAgent(paneId: String, name: String?): Unit = unsupported(Capability.agentNaming)
+    fun promptAgent(paneId: String, text: String): Unit = unsupported(Capability.agentPrompt)
+    fun promptAndWait(paneId: String, text: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus = unsupported(Capability.agentWait)
+    fun waitAgent(paneId: String, until: Set<AgentStatus>, timeoutMs: Long): AgentStatus = unsupported(Capability.agentWait)
+    fun sendKeys(paneId: String, keys: List<String>): Unit = unsupported(Capability.agentPrompt)
+    fun paneKeys(paneId: String, keys: List<String>): Unit = unsupported(Capability.agentPrompt)
+    fun integrations(): List<Integration> = unsupported(Capability.integrations)
+    fun installIntegration(target: String): Unit = unsupported(Capability.integrations)
+    fun uninstallIntegration(target: String): Unit = unsupported(Capability.integrations)
+    fun readAgent(paneId: String): String = unsupported(Capability.agentPrompt)
+    fun processInfo(paneId: String): ProcInfo? = unsupported(Capability.structure)
+    fun closePane(paneId: String): Unit = unsupported(Capability.structure)
+    fun closeTab(tabId: String): Unit = unsupported(Capability.structure)
+    fun closeSpace(workspaceId: String, group: Boolean = false): Unit = unsupported(Capability.structure)
+    fun removeWorktree(workspaceId: String, force: Boolean = false): Unit = unsupported(Capability.worktrees)
+    fun startAgent(paneId: String, kind: String, name: String): Unit = unsupported(Capability.agentStart)
 
-    fun markSeen(paneId: String, turn: Long): Unit = throw Unsupported(Capability.seenMarkers)
-    fun markUnread(paneId: String): Unit = throw Unsupported(Capability.seenMarkers)
-    fun setPinned(paneId: String, pinned: Boolean): Unit = throw Unsupported(Capability.pins)
+    fun markSeen(paneId: String, turn: Long): Unit = unsupported(Capability.seenMarkers)
+    fun markUnread(paneId: String): Unit = unsupported(Capability.seenMarkers)
+    fun setPinned(paneId: String, pinned: Boolean): Unit = unsupported(Capability.pins)
+}
+
+private fun unsupported(c: Capability): Nothing = throw Unsupported(c)
+
+/** Which backend the "Herdr version" setting picks right now. `kind` null: none reachable (Down, no fallback). */
+data class Choice(val kind: BackendKind?, val notice: Boolean = false)
+
+/**
+ * auto prefers Herdr 1 and says once that Herdr 2 runs too; an explicit version never falls back to the other.
+ * The probes run lazily, Herdr 1's first, and never start a server.
+ */
+fun chooseBackend(setting: String?, herdr1Up: () -> Boolean, coreUp: () -> Boolean): Choice = when (setting) {
+    "herdr1" -> Choice(if (herdr1Up()) BackendKind.HERDR1 else null)
+    "herdr2" -> Choice(if (coreUp()) BackendKind.HERDR2 else null)
+    else -> when {
+        herdr1Up() -> Choice(BackendKind.HERDR1, notice = coreUp())
+        coreUp() -> Choice(BackendKind.HERDR2)
+        else -> Choice(null)
+    }
 }

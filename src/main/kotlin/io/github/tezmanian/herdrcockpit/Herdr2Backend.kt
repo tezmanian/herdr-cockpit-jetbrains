@@ -1,0 +1,77 @@
+// Herdr 2 (herdr-core plus the Herdr app's layout document), experimental: the sidebar mirrors the Herdr app's
+// window and terminals open with `hc attach`. Read-only otherwise: spaces, tabs and panes are made in the app
+// (tez/herdr-cockpit#71). Settings and IDE state come in as functions, so this file has no IntelliJ imports.
+package io.github.tezmanian.herdrcockpit
+
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
+
+/** Terminal addresses `hc attach` gets: local ones only, never an option. */
+private val ADDRESS = Regex("^[a-z0-9][a-z0-9_-]{0,31}$")
+
+class Herdr2Backend(
+    private val hcBinary: () -> String,
+    private val customSocket: () -> String?,
+    /** A folder's git top level; null outside a repo and in untrusted projects. */
+    private val gitTop: (String) -> String?,
+) : Backend {
+    private val core = CoreClient({ socketPath() })
+    @Volatile private var coreVersion: String? = null
+    /** The latest terminal records by address, for the shells' foreground process. */
+    @Volatile private var terminals: Map<String, JsonObject> = emptyMap()
+    private val watcher = ActivityWatcher { t ->
+        val fg = terminals[t.paneId]?.get("foreground")?.takeIf { it.isJsonObject }?.asJsonObject
+        val info = if (t.agent || fg == null) null else fg.get("pid")?.takeIf { it.isJsonPrimitive }?.asLong.let { pid ->
+            ProcInfo(pid, listOf(Proc(pid, fg.get("name")?.takeIf { it.isJsonPrimitive }?.asString ?: "",
+                fg.get("argv")?.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { it.takeIf { e -> e.isJsonPrimitive }?.asString }.orEmpty(), null)))
+        }
+        val read = core.request("terminal.read", JsonObject().apply { addProperty("terminal", t.paneId); addProperty("lines", if (t.agent) 60 else 40) })
+        info to (read.get("text")?.takeIf { it.isJsonPrimitive }?.asString ?: "")
+    }
+
+    override val kind = BackendKind.HERDR2
+    override val capabilities: Set<Capability> = setOf(Capability.attach, Capability.activity)
+    override val actions = object : BackendActions {}
+
+    fun socketPath(): String = resolveCoreSocket(customSocket())
+
+    override fun reachable() = core.hello()?.also { coreVersion = it.version } != null
+
+    override fun diagnose(e: Exception) = Diagnosis(
+        DownReason.Unreachable, socketPath(), customSocket() != null, hcBinary(),
+        detail = if (e is LayoutUnreadable) e.message else "herdr-core isn't reachable at ${socketPath()}: ${e.message}. It runs once the Herdr app has started.",
+    )
+
+    /** The IDE's environment without the Herdr 1 and hc terminal variables of a terminal it was started from. */
+    override fun env(): Map<String, String> {
+        val env = System.getenv().filterKeys { !it.startsWith("HERDR_") && it != "HC_TERMINAL_ID" }.toMutableMap()
+        customSocket()?.let { env["HC_SOCKET"] = resolveCoreSocket(it) }
+        return env
+    }
+
+    override fun snapshot(): Model {
+        if (coreVersion == null) coreVersion = core.hello()?.version
+        val doc = core.request("doc.get", JsonObject().apply { addProperty("name", "herdr-app") })
+        val list = core.request("terminal.list").get("terminals")?.takeIf { it.isJsonArray }?.asJsonArray ?: JsonArray()
+        terminals = list.mapNotNull { it.takeIf { e -> e.isJsonObject }?.asJsonObject }
+            .mapNotNull { t -> t.get("address")?.takeIf { it.isJsonPrimitive }?.asString?.let { it to t } }.toMap()
+        return coreModel(doc, list, System.getProperty("user.home"), gitTop, coreVersion)
+    }
+
+    /** One unfiltered subscription for everything: it never needs renewing. */
+    override fun subscriptionKey(model: Model?) = ""
+    override fun subscribe(model: Model?, onChange: () -> Unit, onEnd: (Exception?) -> Unit) = core.subscribe(onChange, onEnd)
+
+    // shortcut: subprocess attach; framed-mode attach in-process if resize or paste glitches show up
+    override fun attachCommand(paneId: String, observe: Boolean, cols: Int, rows: Int): List<String> {
+        if (!ADDRESS.matches(paneId)) throw HerdrError("bad_address", "not a local terminal address: $paneId")
+        return listOf(hcBinary(), "attach", paneId)
+    }
+
+    override fun activity() = watcher
+
+    override fun dispose() {
+        core.dispose()
+        watcher.shutdown()
+    }
+}

@@ -60,6 +60,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         private val LOG = Logger.getInstance(HerdrService::class.java)
         /** Herdr versions whose integrations were checked: one warning per version and IDE run, not per project. */
         private val integrationsChecked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+        /** "Herdr 2 is also running" is said once per IDE run. */
+        private val bothNoticed = java.util.concurrent.atomic.AtomicBoolean(false)
     }
 
     private sealed class Conn(val kind: String) {
@@ -74,14 +76,24 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     private val loop = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-loop").apply { isDaemon = true } }
     private val activityExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-activity-loop").apply { isDaemon = true } }
     private val usageExec = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "herdr-usage-loop").apply { isDaemon = true } }
-    /** The Herdr version this window talks to. */
     private val herdr1 = Herdr1Backend(::binary, ::customSocket)
-    val backend: Backend = herdr1
+    /** Git top levels of Herdr 2 folders, which name unnamed spaces. */
+    // shortcut: cached for the window's life, so a folder that becomes a repo keeps its old name; expire it if that shows
+    private val gitTops = ConcurrentHashMap<String, java.util.Optional<String>>()
+    private val herdr2 = Herdr2Backend({ resolveTool("hc", settings.hcPath) }, { settings.coreSocketPath?.takeIf { it.isNotBlank() } }) { dir ->
+        if (!TrustedProjects.isProjectTrusted(project)) null else gitTops.computeIfAbsent(dir) { java.util.Optional.ofNullable(gitRoot(it)) }.orElse(null)
+    }
+    /** The Herdr version this window talks to, chosen by the "Herdr version" setting on every connect. */
+    @Volatile var backend: Backend = herdr1
+        private set
+    /** The setting the current connection was made with; a change reconnects. */
+    private var connectedWith = backendSetting()
     override val actions: BackendActions get() = backend.actions
     val reviewFlow = ReviewFlow(project, this)
     private val manage = HerdrManage(project, this)
     fun sendToAgent(context: String, path: String?) = manage.sendToAgent(context, path)
-    fun reviewChanges(files: List<String>, base: String, head: String) = reviewFlow.reviewChanges(files, base, head)
+    fun reviewChanges(files: List<String>, base: String, head: String) =
+        if (has(Capability.agentPrompt)) reviewFlow.reviewChanges(files, base, head) else notify("Reviews with an agent need Herdr 1.", NotificationType.INFORMATION)
     private val activity get() = backend.activity()
     private val git = GitCache { scheduleRender() }
     private val logLines = ArrayDeque<String>()
@@ -150,6 +162,9 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     fun herdrEnvNow(): Map<String, String> = backend.env()
 
     fun has(c: Capability) = c in backend.capabilities
+    /** The settings that act only with Herdr 1 (follow, mount, auto-attach, close-on-switch, a space per project). */
+    private val herdr1Only get() = backend.kind == BackendKind.HERDR1
+    private fun backendSetting() = listOf(settings.herdrVersion, settings.hcPath, settings.coreSocketPath).joinToString("\u0000")
 
     override fun log(line: String) {
         LOG.info(line)
@@ -182,8 +197,60 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     }
 
     fun settingsChanged() {
-        loop.execute { guard { refresh(); render() } }
+        loop.execute {
+            guard {
+                if (backendSetting() != connectedWith) reconnect() else refresh()
+                render()
+            }
+        }
         pollUsageNow()
+    }
+
+    /** The Herdr version setting changed: choose again. */
+    private fun reconnect() {
+        connectedWith = backendSetting()
+        log("herdr version setting changed; reconnecting")
+        // connect() drops the connection when the backend changes; Herdr 2's socket or hc may have changed in place.
+        if (backend === herdr2) dropConnection()
+        connect()
+    }
+
+    /** Ends this connection and closes its pane tabs; they only detach, the programs keep running. */
+    private fun dropConnection() {
+        sub?.dispose() // dispose() doesn't call onEnd
+        sub = null
+        eventsLive = false
+        // Out of `files` first: closedTab() then takes the close for the plugin's own, never closing in Herdr.
+        val open = files.values.toList()
+        files.clear()
+        if (open.isNotEmpty()) edt { val fem = FileEditorManager.getInstance(project); open.forEach(fem::closeFile) }
+        model = null
+        firstLoad = true // the new backend's agents aren't news
+        lastFocusedSpace = null
+        conn = Conn.Connecting
+        failures = 0
+        nextAttempt = 0
+        lastDiagnosis = 0
+    }
+
+    /** Chooses the backend (Herdr 1 is probed by its snapshot, herdr-core by hello) and reads it; never starts a server. */
+    private fun connect() {
+        val setting = settings.herdrVersion
+        val choice = chooseBackend(setting, { runCatching { herdr1.snapshot() }.isSuccess }, { herdr2.reachable() })
+        val next = when (choice.kind) {
+            BackendKind.HERDR1 -> herdr1
+            BackendKind.HERDR2 -> herdr2
+            null -> if (setting == "herdr2") herdr2 else herdr1 // Down: diagnosed by the version asked for (Automatic: Herdr 1)
+        }
+        if (next !== backend) {
+            dropConnection()
+            backend = next
+            log("using ${if (next.kind == BackendKind.HERDR2) "Herdr 2 (experimental)" else "Herdr 1"}")
+        }
+        if (choice.notice && bothNoticed.compareAndSet(false, true))
+            herdrNotify(project, "Herdr 2 is also running. You can switch in Settings → Herdr version.", NotificationType.INFORMATION,
+                "Open Settings" to { ShowSettingsUtil.getInstance().showSettingsDialog(project, HerdrConfigurable::class.java) })
+        refresh()
     }
 
     // ---------- sync loop ----------
@@ -196,7 +263,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
                 if (sub == null) startEvents()
             }
             is Conn.Starting -> {}
-            else -> if (now >= nextAttempt) refresh()
+            // While reconnecting, retry the same backend: a short Herdr 1 restart must not move Automatic to Herdr 2.
+            else -> if (now >= nextAttempt) { if (conn is Conn.Reconnecting) refresh() else connect() }
         }
     }
 
@@ -323,7 +391,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
 
         // Follow mode: Herdr's focus moved (e.g. you switched spaces in your terminal).
         val focused = next.focusedSpaceId
-        if (!firstLoad && prev != null && focused != null && focused != lastFocusedSpace && !switching && settings.followMode && isManaged()) {
+        if (!firstLoad && prev != null && focused != null && focused != lastFocusedSpace && !switching && settings.followMode && herdr1Only && isManaged()) {
             next.space(focused)?.let { sp ->
                 log("follow: herdr focused ${sp.label}")
                 edt { switchTo(sp, fromHerdr = true) }
@@ -392,9 +460,9 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             if (project.isDisposed) return@invokeLater
             NotificationGroupManager.getInstance().getNotificationGroup("Herdr Cockpit")
                 .createNotification(text, if (st == AgentStatus.blocked) NotificationType.WARNING else NotificationType.INFORMATION)
-                .apply { if (st == AgentStatus.blocked) addAction(NotificationAction.createSimpleExpiring("Answer…") { answerAgent(project, this@HerdrService.actions, name, agent.id) }) }
+                .apply { if (st == AgentStatus.blocked && has(Capability.agentPrompt)) addAction(NotificationAction.createSimpleExpiring("Answer…") { answerAgent(project, this@HerdrService.actions, name, agent.id) }) }
                 .addAction(NotificationAction.createSimpleExpiring("Show") { model?.find(agent.id)?.let { (s, p) -> attachPane(s, p) } })
-                .apply { if (st == AgentStatus.done) addAction(NotificationAction.createSimpleExpiring("Hand Off…") { model?.find(agent.id)?.let { (s, p) -> manage.handOff(s, p) } }) }
+                .apply { if (st == AgentStatus.done && has(Capability.agentPrompt)) addAction(NotificationAction.createSimpleExpiring("Hand Off…") { model?.find(agent.id)?.let { (s, p) -> manage.handOff(s, p) } }) }
                 .notify(project)
         }
     }
@@ -479,7 +547,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
                 since = { stateSince[it]?.second },
                 git = { if (trusted) git.get(it) else null },
                 mounted = ::isMounted,
-                attached = { files[it]?.connector != null },
+                attached = { files[it]?.streaming == true },
                 activity = activity::get,
                 connection = connectionJson(),
                 usage = usage,
@@ -581,16 +649,16 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         switching = true
         try {
             props().setValue(MANAGED_KEY, true)
-            if (settings.mountOnSwitch) mount(space)
-            if (!fromHerdr) {
+            if (settings.mountOnSwitch && herdr1Only) mount(space)
+            if (!fromHerdr && has(Capability.structure)) {
                 loop.execute { guard { actions.focusSpace(space.id) } }
                 lastFocusedSpace = space.id // don't let follow mode bounce us
             }
-            if (settings.closeTerminalsOnSwitch) {
+            if (settings.closeTerminalsOnSwitch && herdr1Only) {
                 val fem = FileEditorManager.getInstance(project)
                 for ((id, f) in files) if (f.spaceId != space.id) { files.remove(id); fem.closeFile(f) }
             }
-            if (autoAttach) {
+            if (autoAttach && herdr1Only) {
                 val panes = attachOrder(space, settings.autoAttachShells)
                 // Following Herdr: a pane another window holds stays there (shown read-only), it isn't taken.
                 for (p in panes) openTab(space, p, focus = false, polite = fromHerdr)
@@ -607,12 +675,13 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     }
 
     fun attachPane(space: Space, pane: Pane) {
-        if (files[pane.id]?.connector == null && settings.mountOnSwitch && !isMounted(space) && space.cwd != null) switchTo(space, autoAttach = false)
+        if (files[pane.id]?.streaming != true && settings.mountOnSwitch && herdr1Only && !isMounted(space) && space.cwd != null) switchTo(space, autoAttach = false)
         openTab(space, pane, focus = true)
-        if (pane.isAgent) loop.execute { runCatching { actions.focusAgent(pane.id) } }
+        if (pane.isAgent && has(Capability.structure)) loop.execute { runCatching { actions.focusAgent(pane.id) } }
     }
 
     private fun openTab(space: Space, pane: Pane, focus: Boolean, polite: Boolean = false) {
+        if (model?.find(pane.id) == null) return // shown by the backend before a switch
         val fem = FileEditorManager.getInstance(project)
         var f = files[pane.id]
         if (f != null && (f.ended || !fem.isFileOpen(f))) {
@@ -621,7 +690,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             f = null
         }
         if (f == null) {
-            f = HerdrPaneFile(pane.id, space.id, editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.isAgent).also { it.polite = polite }
+            f = HerdrPaneFile(pane.id, space.id, editorTitle(space, space.tabs.firstOrNull { it.id == pane.tabId }, pane), pane.isAgent,
+                core = backend.kind == BackendKind.HERDR2).also { it.polite = polite }
             files[pane.id] = f
         }
         OpenFileDescriptor(project, f).navigate(focus)
@@ -640,12 +710,13 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
                 ?.let { (s, p) -> attachPane(s, p) }
             "refresh" -> { nextAttempt = 0; lastDiagnosis = 0; loop.execute { guard { refresh() } } }
             "toggleShellPanes" -> { settings.showShells = !settings.showShells; scheduleRender() }
-            "startServer" -> startHerdr()
-            "stopServer" -> stopHerdr()
-            "openInstallDocs" -> BrowserUtil.browse("https://herdr.dev")
+            "startServer" -> if (has(Capability.serverLifecycle)) startHerdr() else herdr2RunsWithTheApp()
+            "stopServer" -> if (has(Capability.serverLifecycle)) stopHerdr()
+            "openInstallDocs" -> BrowserUtil.browse(if (backend.kind == BackendKind.HERDR2) "https://github.com/herdrdev/herdr-core" else "https://herdr.dev")
             "openSettings" -> ShowSettingsUtil.getInstance().showSettingsDialog(project, HerdrConfigurable::class.java)
             "copyDiagnostics" -> copyDiagnostics()
             "newSpace" -> if (has(Capability.structure)) manage.newSpace()
+                else notify("Herdr 2 spaces are made in the Herdr app. No layout yet: open the Herdr app once.", NotificationType.INFORMATION)
             "newTab" -> if (has(Capability.structure)) m?.space(spaceId)?.let { manage.newTab(it) }
             "review" -> if (has(Capability.agentPrompt)) m?.space(spaceId)?.let { reviewFlow.review(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "splitRight", "splitDown" -> if (has(Capability.structure)) m?.find(paneId)?.let { (s, p) -> manage.split(s, p, right = command == "splitRight") }
@@ -653,10 +724,15 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             "menu" -> m?.space(spaceId)?.let { manage.menu(it, it.panes.firstOrNull { p -> p.id == paneId }) }
             "setupClaudeUsage" -> manage.setUpClaudeUsage()
             "setKiroCredits" -> manage.setKiroCredits()
-            "openTui" -> openTui()
+            "openTui" -> if (has(Capability.serverLifecycle)) openTui() else herdr2RunsWithTheApp()
             "openHelp" -> openHelp()
             else -> notify("\"$command\" isn't available in the JetBrains port yet.", NotificationType.INFORMATION)
         }
+    }
+
+    private fun herdr2RunsWithTheApp() {
+        herdrNotify(project, "Herdr 2 runs in the background once the Herdr app has started. Start the Herdr app, or choose Herdr 1.",
+            NotificationType.INFORMATION, "Open Settings" to { ShowSettingsUtil.getInstance().showSettingsDialog(project, HerdrConfigurable::class.java) })
     }
 
     private var tui: HerdrTuiFile? = null
@@ -751,8 +827,10 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         val text = buildString {
             appendLine("Herdr Cockpit (JetBrains) diagnostics")
             appendLine("connection: ${conn.kind}")
+            appendLine("backend: ${backend.kind} (setting: ${settings.herdrVersion})")
             appendLine("binary: ${binary()}")
             appendLine("socket: ${socketPath()}")
+            appendLine("core socket: ${herdr2.socketPath()}")
             appendLine("events live: $eventsLive")
             appendLine("spaces: ${model?.spaces?.size ?: 0}, panes: ${model?.paneIds()?.size ?: 0}")
             appendLine("--- log ---")
@@ -788,7 +866,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
 
     override fun dispose() {
         sub?.dispose()
-        backend.dispose()
+        herdr1.dispose()
+        herdr2.dispose()
         loop.shutdownNow()
         activityExec.shutdownNow()
         usageExec.shutdownNow()

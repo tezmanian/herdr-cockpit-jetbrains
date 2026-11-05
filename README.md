@@ -16,6 +16,7 @@ The plugin is a **client of the Herdr server**. It never owns agent processes; H
 |---|---|---|
 | A JetBrains IDE | 2025.3 or newer (build 253+): PhpStorm, IntelliJ IDEA, WebStorm, PyCharm, GoLand, … | the plugin |
 | [Herdr](https://herdr.dev) | 0.9.1 – 0.9.3 (socket protocol 22) | everything |
+| [herdr-core](https://github.com/herdrdev/herdr-core) and the Herdr app | core 0.1.x (protocol generation 1) | optional, experimental: Herdr 2 instead of Herdr 1 |
 | git | any recent | the git line, Review, worktrees |
 | macOS, Linux or Windows | | the plugin talks to Herdr's Unix socket (on Windows its named pipe); see [Windows](#windows) |
 | `curl` or `wget` | | optional: the Herdr plugin (links from Herdr to the IDE) |
@@ -152,6 +153,12 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
 - **herdr binary** and **Socket**: leave empty normally. The socket follows `HERDR_SOCKET_PATH`, then
   `HERDR_SESSION`, else `~/.config/herdr/herdr.sock`; a path `…/sessions/<name>/herdr.sock` selects that named
   session.
+- **Herdr version**: *Automatic* uses Herdr 1 when it answers, else Herdr 2 (herdr-core with the Herdr app);
+  *Herdr 1* or *Herdr 2 (experimental)* use only that one. Herdr 2 is read-only apart from its terminals: the
+  sidebar mirrors the Herdr app's window and opens terminals with `hc attach`; spaces, tabs and panes are made in
+  the app, and agent prompts, reviews with agents, worktrees and links from Herdr need Herdr 1. The **hc binary**
+  and **Core socket** fields are for Herdr 2 (empty: `hc` on PATH, `HC_SOCKET`, else the core's default session
+  socket); switching, following and closing settings apply to Herdr 1 only.
 - The disconnected screen tells *not installed*, *not running*, *crashed*, *incompatible* (a Herdr version with
   another protocol) and *unreachable* apart. The status bar menu has *Copy Diagnostics* for a bug report.
 - Usage bars for Claude Code's plan limits need its status line: *Show plan limits…* in the sidebar sets it up (it
@@ -328,6 +335,19 @@ HERDR_SOCKET_PATH=~/.config/herdr/sessions/hcjb/herdr.sock herdr server stop
 If you run this from inside a Herdr pane, `HERDR_SOCKET_PATH` points at your live session and wins over
 `HERDR_SESSION`: always set the socket explicitly, as above.
 
+Herdr 2 (experimental) gets its own folders, so neither your core nor your Herdr app is touched; see
+`specs/001-herdr2-backend/quickstart.md` §2 for the headless app:
+
+```bash
+R=/var/tmp/hcjb2; mkdir -p $R/{state,config,run,data,home}; chmod 700 $R/run
+export XDG_STATE_HOME=$R/state XDG_CONFIG_HOME=$R/config XDG_RUNTIME_DIR=$R/run XDG_DATA_HOME=$R/data HC_SESSION=hcjb2t
+unset HC_SOCKET HERDR_SOCKET_PATH HERDR_SESSION
+hc server start
+HC_LIVE_SOCKET=$R/run/herdr-core/hcjb2t.sock ./gradlew test --tests '*CoreLiveTest*'
+./gradlew runIde -PcoreSocket=$R/run/herdr-core/hcjb2t.sock -PopenProject=/path/to/some/project
+hc server stop
+```
+
 For screenshots, a pane can pose as an agent without starting one:
 `herdr pane report-agent <pane> --source demo --agent claude --state blocked --message "…"`.
 
@@ -352,6 +372,9 @@ findings unpublished). The send flow, the Review servers table, tokens and the d
 |---|---|
 | `Backend.kt` | The boundary to the Herdr version: `Backend`, `BackendActions`, `Capability` (what the UI may offer) |
 | `Herdr1Backend.kt` | Herdr 1: snapshot, event subscription, diagnosis and the pane stream command, over `HerdrClient` |
+| `Herdr2Backend.kt` | Herdr 2 (experimental): the Herdr app's layout plus herdr-core's terminals, `hc attach`, shell activity |
+| `CoreClient.kt` | herdr-core's socket (where to find it, `hello`, its error codes and event stream), over `HerdrClient` |
+| `CoreModel.kt` | `coreModel()`: layout document + terminals → Space → Tab → Pane, with the app's names and the seen status |
 | `HerdrClient.kt` | NDJSON over the Unix socket: `request()` (one short connection per call), `subscribe()` |
 | `Model.kt` | `normalize()`: flat `session.snapshot` → Space → Tab → Pane |
 | `Connection.kt` | finding `herdr`, `diagnose()`, `startServer()` (detached, clean env), backoff |

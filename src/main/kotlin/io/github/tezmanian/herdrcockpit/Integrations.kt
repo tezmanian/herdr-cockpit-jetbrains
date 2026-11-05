@@ -43,11 +43,13 @@ class IntegrationTable {
     init { load() }
 
     // The settings are application-wide; any open project's connection reaches the same Herdr.
-    private fun actions() = ProjectManager.getInstance().openProjects.firstOrNull()?.let { HerdrService.getInstance(it).actions }
+    private fun service() = ProjectManager.getInstance().openProjects.firstOrNull()?.let { HerdrService.getInstance(it) }
 
     /** Runs `change` off the EDT, then reloads the list; the dialog is modal, so results come back in its modality. */
     private fun load(change: ((BackendActions) -> Unit)? = null) {
-        val a = actions() ?: return run { table.emptyText.text = "Open a project to see Herdr's integrations." }
+        val s = service() ?: return run { table.emptyText.text = "Open a project to see Herdr's integrations." }
+        if (!s.has(Capability.integrations)) return run { table.emptyText.text = "Herdr 1 only: not used with Herdr 2." }
+        val a = s.actions
         table.emptyText.text = "Loading…"
         val modality = ModalityState.stateForComponent(table)
         ApplicationManager.getApplication().executeOnPooledThread {

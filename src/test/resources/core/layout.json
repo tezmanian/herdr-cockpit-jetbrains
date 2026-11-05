@@ -1,0 +1,85 @@
+{
+  "value": {
+    "spaces": [
+      {
+        "folder": "/tmp",
+        "id": "sp437fd27a8d16c79b3b713429a13a59b5",
+        "name": "cockpit",
+        "tabs": [
+          {
+            "id": "tb1b84a9564f6fd13e1dee358a24074b1a",
+            "name": "main",
+            "root": {
+              "children": [
+                {
+                  "content": {
+                    "terminal": "t1"
+                  },
+                  "id": "p23c0003996ce17c043b9a683f45c8783",
+                  "type": "block"
+                }
+              ],
+              "id": "tb1b84a9564f6fd13e1dee358a24074b1a",
+              "type": "row"
+            }
+          },
+          {
+            "id": "tbe42325817f857a1439f62d513c8693a8",
+            "name": "",
+            "root": {
+              "children": [
+                {
+                  "content": {
+                    "terminal": "t2"
+                  },
+                  "id": "p10289961c94675d63ea7206b7f603e58",
+                  "size": {
+                    "weight": 0.5
+                  },
+                  "type": "block"
+                },
+                {
+                  "content": {
+                    "terminal": "t3"
+                  },
+                  "id": "pe8b9ed65c44a1702833aacdd6e74fb81",
+                  "size": {
+                    "weight": 0.5
+                  },
+                  "type": "block"
+                }
+              ],
+              "id": "tbe42325817f857a1439f62d513c8693a8",
+              "type": "row"
+            }
+          }
+        ]
+      },
+      {
+        "folder": "/var/tmp",
+        "id": "spa604fe52172ea8e2cbab51ed65501f9a",
+        "name": "",
+        "tabs": [
+          {
+            "id": "tbe252aabd5d1493541db1c5f058d3e53f",
+            "name": "",
+            "root": {
+              "children": [
+                {
+                  "content": {
+                    "terminal": "t4"
+                  },
+                  "id": "p27581d78287d74350633d41078f5e897",
+                  "type": "block"
+                }
+              ],
+              "id": "tbe252aabd5d1493541db1c5f058d3e53f",
+              "type": "row"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "version": 3
+}

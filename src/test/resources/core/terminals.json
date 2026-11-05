@@ -1,0 +1,183 @@
+{
+  "hidden_finished": 0,
+  "terminals": [
+    {
+      "address": "t1",
+      "argv": [
+        "/bin/bash"
+      ],
+      "cols": 114,
+      "created_ms": 1793889293805,
+      "cwd": "/tmp",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "foreground": {
+        "argv": [
+          "/bin/bash"
+        ],
+        "cwd": "/tmp",
+        "name": "bash",
+        "pid": 3478154
+      },
+      "identity": "ghostty",
+      "keep": true,
+      "labels": {
+        "herdr.seen": "0",
+        "herdr.space": "sp437fd27a8d16c79b3b713429a13a59b5",
+        "herdr.tab": "tb1b84a9564f6fd13e1dee358a24074b1a",
+        "where": "cockpit / main"
+      },
+      "name": null,
+      "notify": true,
+      "parent": null,
+      "pid": 3478154,
+      "reason": null,
+      "reported": true,
+      "rm": false,
+      "rows": 30,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": {
+        "state": "idle"
+      },
+      "status_ms": 1793889306919,
+      "template": null,
+      "title": "dev@dev-env: /tmp",
+      "turn": 1
+    },
+    {
+      "address": "t2",
+      "argv": [
+        "/bin/bash"
+      ],
+      "cols": 55,
+      "created_ms": 1793889294314,
+      "cwd": "/tmp",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "foreground": {
+        "argv": [
+          "/bin/bash"
+        ],
+        "cwd": "/tmp",
+        "name": "bash",
+        "pid": 3478219
+      },
+      "identity": "ghostty",
+      "keep": true,
+      "labels": {
+        "herdr.seen": "0",
+        "herdr.space": "sp437fd27a8d16c79b3b713429a13a59b5",
+        "herdr.tab": "tbe42325817f857a1439f62d513c8693a8",
+        "where": "cockpit / 2"
+      },
+      "name": null,
+      "notify": true,
+      "parent": null,
+      "pid": 3478219,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 30,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "dev@dev-env: /tmp",
+      "turn": 0
+    },
+    {
+      "address": "t3",
+      "argv": [
+        "/bin/bash"
+      ],
+      "cols": 55,
+      "created_ms": 1793889294889,
+      "cwd": "/tmp",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "foreground": {
+        "argv": [
+          "/bin/bash"
+        ],
+        "cwd": "/tmp",
+        "name": "bash",
+        "pid": 3478342
+      },
+      "identity": "ghostty",
+      "keep": true,
+      "labels": {
+        "herdr.seen": "0",
+        "herdr.space": "sp437fd27a8d16c79b3b713429a13a59b5",
+        "herdr.tab": "tbe42325817f857a1439f62d513c8693a8",
+        "where": "cockpit / 2"
+      },
+      "name": null,
+      "notify": true,
+      "parent": null,
+      "pid": 3478342,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 30,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "dev@dev-env: /tmp",
+      "turn": 0
+    },
+    {
+      "address": "t4",
+      "argv": [
+        "/bin/bash"
+      ],
+      "cols": 114,
+      "created_ms": 1793889295551,
+      "cwd": "/var/tmp",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "foreground": {
+        "argv": [
+          "/bin/bash"
+        ],
+        "cwd": "/var/tmp",
+        "name": "bash",
+        "pid": 3478494
+      },
+      "identity": "ghostty",
+      "keep": true,
+      "labels": {
+        "herdr.seen": "0",
+        "herdr.space": "spa604fe52172ea8e2cbab51ed65501f9a",
+        "herdr.tab": "tbe252aabd5d1493541db1c5f058d3e53f",
+        "where": "tmp / 1"
+      },
+      "name": null,
+      "notify": true,
+      "parent": null,
+      "pid": 3478494,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 30,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "dev@dev-env: /var/tmp",
+      "turn": 0
+    }
+  ]
+}
