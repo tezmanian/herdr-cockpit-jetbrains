@@ -21,6 +21,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
@@ -38,6 +39,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.wm.IdeFocusManager
 import java.awt.datatransfer.StringSelection
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -129,6 +131,9 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     private var codexLiveAt = 0L
     // Before init {}: its first task runs on another thread right away and may beat the rest of the constructor.
     private val claims = Claims()
+    /** Herdr 2 panes whose tab is selected while this project's window is in front (set on the EDT). */
+    @Volatile private var lookingAt: Set<String> = emptySet()
+    val seen = SeenTracker({ it in lookingAt }, { log("herdr.seen: ${it.message}") }) { id, turn -> actions.markSeen(id, turn) }
 
     init {
         loop.execute { guard { claims.prune() } }
@@ -141,6 +146,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         })
         project.messageBus.connect(this).subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, object : FileEditorManagerListener {
             override fun fileClosed(source: FileEditorManager, file: VirtualFile) { if (file is HerdrPaneFile) closedTab(file) }
+            override fun selectionChanged(event: FileEditorManagerEvent) = updateLooking()
         })
     }
 
@@ -153,6 +159,22 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
     }
 
     private fun guard(f: () -> Unit) = try { f() } catch (e: Throwable) { LOG.warn(e) }
+
+    /** On the EDT: which Herdr 2 tabs you are looking at. A change may mark their agents seen. */
+    private fun updateLooking() {
+        val inFront = ApplicationManager.getApplication().isActive && IdeFocusManager.getGlobalInstance().lastFocusedFrame?.project == project
+        val now = if (!has(Capability.seenMarkers) || !inFront) emptySet()
+            else FileEditorManager.getInstance(project).selectedEditors.mapNotNullTo(HashSet()) { (it.file as? HerdrPaneFile)?.paneId }
+        if (now == lookingAt) return
+        lookingAt = now
+        if (now.isNotEmpty()) loop.execute { guard { markSeen() } }
+    }
+
+    /** Herdr 2: raise `herdr.seen` for the agents you are looking at. Not on the EDT. */
+    private fun markSeen() {
+        val m = model ?: return
+        if (has(Capability.seenMarkers)) runCatching { seen.observe(m.spaces.flatMap { it.agents }) }.onFailure { log("herdr.seen: ${it.message}") }
+    }
 
     // ---------- configuration ----------
     fun binary(): String = resolveBinary(settings.binaryPath)
@@ -258,6 +280,8 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
         val now = System.currentTimeMillis()
         when (conn) {
             is Conn.Connected -> {
+                // Window focus has no project-level event; check it with the tick.
+                if (has(Capability.seenMarkers)) edt { updateLooking() }
                 // Without an event stream poll every tick; with one, a safety net every 5s (pane renames emit no event).
                 if (!eventsLive || now - lastRefresh > 5000) refresh()
                 if (sub == null) startEvents()
@@ -281,6 +305,7 @@ class HerdrService(private val project: Project) : Disposable, ReviewHost {
             conn = Conn.Connected(next.version, next.protocol)
             failures = 0
             apply(next)
+            markSeen()
             if (!wasConnected) {
                 log("connected to herdr ${next.version ?: ""}".trim())
                 warnOutdatedIntegrations(next.version)

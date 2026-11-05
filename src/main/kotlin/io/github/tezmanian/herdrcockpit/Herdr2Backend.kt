@@ -5,6 +5,7 @@ package io.github.tezmanian.herdrcockpit
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import java.util.concurrent.ConcurrentHashMap
 
 /** Terminal addresses `hc attach` gets: local ones only, never an option. */
 private val ADDRESS = Regex("^[a-z0-9][a-z0-9_-]{0,31}$")
@@ -30,8 +31,23 @@ class Herdr2Backend(
     }
 
     override val kind = BackendKind.HERDR2
-    override val capabilities: Set<Capability> = setOf(Capability.attach, Capability.activity)
-    override val actions = object : BackendActions {}
+    override val capabilities: Set<Capability> = setOf(Capability.attach, Capability.activity, Capability.seenMarkers, Capability.pins)
+    override val actions = object : BackendActions {
+        override fun markSeen(paneId: String, turn: Long) = label(paneId, "herdr.seen", turn.toString())
+        override fun setPinned(paneId: String, pinned: Boolean) = label(paneId, "herdr.pinned", if (pinned) "1" else "")
+    }
+
+    /** Sets one label; a terminal that is gone by now is fine. */
+    private fun label(paneId: String, key: String, value: String) {
+        try {
+            core.request("terminal.label", JsonObject().apply {
+                addProperty("terminal", paneId)
+                add("labels", JsonObject().apply { addProperty(key, value) })
+            })
+        } catch (e: HerdrError) {
+            if (e.code != "not_found") throw e
+        }
+    }
 
     fun socketPath(): String = resolveCoreSocket(customSocket())
 
@@ -73,5 +89,38 @@ class Herdr2Backend(
     override fun dispose() {
         core.dispose()
         watcher.shutdown()
+    }
+}
+
+/**
+ * Raises an agent's shared `herdr.seen` marker to its turn while you look at its tab, so every Herdr 2 client shows
+ * it as read. `looking` says whether its tab is selected in a focused IDE window. At most one write per turn, and
+ * after Mark unread none until the next turn.
+ */
+class SeenTracker(
+    private val looking: (String) -> Boolean,
+    private val onError: (Exception) -> Unit = {},
+    private val write: (String, Long) -> Unit,
+) {
+    private val lastWritten = ConcurrentHashMap<String, Long>()
+
+    /** `panes`: all agents right now. A gone address is forgotten, so a restarted core can reuse it. */
+    fun observe(panes: List<Pane>) {
+        lastWritten.keys.retainAll(panes.mapTo(HashSet()) { it.id })
+        for (p in panes) {
+            if (!p.isAgent || lastWritten[p.id] == p.turn) continue
+            if ((p.seen == null || p.turn > p.seen) && looking(p.id)) {
+                lastWritten[p.id] = p.turn // one try per turn, even if it fails
+                try { write(p.id, p.turn) } catch (e: Exception) { onError(e) }
+            }
+        }
+    }
+
+    fun canMarkUnread(p: Pane) = p.isAgent && p.turn > 0
+
+    fun markUnread(p: Pane) {
+        if (!canMarkUnread(p)) return
+        lastWritten[p.id] = p.turn // before the write: an observe() meanwhile must not undo it
+        write(p.id, p.turn - 1)
     }
 }

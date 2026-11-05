@@ -51,6 +51,7 @@ class CoreModelTest {
         val t1 = model().find("t1")!!.second
         assertTrue(t1.isAgent)
         assertEquals("turn 1 > herdr.seen 0", AgentStatus.done, t1.status)
+        assertEquals(1L to 0L, t1.turn to t1.seen)
         assertEquals("bash", t1.agentKind)
         assertEquals("/tmp", t1.cwd)
         assertFalse(t1.focused)

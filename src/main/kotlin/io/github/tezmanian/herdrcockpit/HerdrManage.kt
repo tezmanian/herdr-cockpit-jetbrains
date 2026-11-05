@@ -128,6 +128,10 @@ class HerdrManage(project: Project, private val service: HerdrService) : Project
             if (pane?.isAgent == true && has(Capability.agentPrompt)) add(Item("Review Branch with Agent…", AllIcons.Actions.Preview) { service.reviewFlow.reviewBranch(space, pane) })
             if (pane?.isAgent == true && has(Capability.agentPrompt)) add(Item("Hand Off to Agent…", AllIcons.Actions.Forward) { handOff(space, pane) })
             if (pane?.agentKind == "claude" && has(Capability.agentPrompt)) add(Item("Switch Claude Session…", AllIcons.Vcs.History) { switchClaudeSession(space, pane) })
+            if (pane?.isAgent == true && has(Capability.pins))
+                add(Item(if (pane.pinned) "Unpin" else "Pin", AllIcons.Actions.PinTab) { run("Pinning") { actions.setPinned(pane.id, !pane.pinned); service.scheduleRefresh(0) } })
+            if (pane != null && has(Capability.seenMarkers) && service.seen.canMarkUnread(pane))
+                add(Item("Mark Unread", null) { run("Marking unread") { service.seen.markUnread(pane); service.scheduleRefresh(0) } })
             if (has(Capability.structure)) {
                 add(Item("Rename…", AllIcons.Actions.Edit) { rename(space, pane) })
                 add(Item("Close in Herdr…", AllIcons.Actions.Close, "Herdr") { closeInHerdr(space, pane) })

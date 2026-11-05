@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.42
+- Herdr 2 (experimental): an agent's "done" counts as seen once you look at its tab (the tab selected while the
+  IDE window is in front), and every Herdr 2 client shows it as read. The pane menu gets *Pin* / *Unpin* (pinned
+  agents sort first) and *Mark Unread*. Both are shared with the Herdr app. (tez/herdr-cockpit#70)
+
 ## 0.1.41
 - Herdr 2 (experimental): with herdr-core and the Herdr app, the sidebar mirrors the app's window (spaces, tabs,
   terminals, the names the app shows, agent status) and updates on its own, and a terminal opens as an editor tab

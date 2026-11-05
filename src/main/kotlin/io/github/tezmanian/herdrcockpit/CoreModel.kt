@@ -51,6 +51,8 @@ private fun toPane(t: JsonObject, tabId: String, spaceId: String): Pane {
     val fg = t.objAt("foreground")
     val name = t.text("name")
     val kind = if (agent) status?.text("app") ?: fg?.text("name") else null
+    val turn = t.text("turn")?.toLongOrNull() ?: 0
+    val seen = labels?.text("herdr.seen")?.toLongOrNull()
     return Pane(
         id = address,
         tabId = tabId,
@@ -59,7 +61,7 @@ private fun toPane(t: JsonObject, tabId: String, spaceId: String): Pane {
         cwd = liveCwd(t),
         isAgent = agent,
         agentKind = kind,
-        status = if (agent) coreStatus(status?.text("state"), t.text("turn")?.toLongOrNull() ?: 0, labels?.text("herdr.seen")?.toLongOrNull()) else null,
+        status = if (agent) coreStatus(status?.text("state"), turn, seen) else null,
         focused = false, // focus is per screen in Herdr 2, not shared
         stateLabel = null,
         title = null,
@@ -69,6 +71,8 @@ private fun toPane(t: JsonObject, tabId: String, spaceId: String): Pane {
         displayAgent = if (agent) name else null,
         agentName = null,
         pinned = labels?.text("herdr.pinned") != null,
+        turn = turn,
+        seen = seen,
     )
 }
 

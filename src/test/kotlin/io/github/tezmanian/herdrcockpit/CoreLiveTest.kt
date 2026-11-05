@@ -57,6 +57,16 @@ class CoreLiveTest {
             assertEquals(listOf(address), space.panes.map { it.id })
             assertEquals("cockpit-live", space.panes[0].label)
             assertTrue(m.version!!.startsWith("2 (experimental) · core "))
+
+            // Shared markers: pin, seen, unpin. A gone terminal is no error.
+            backend.actions.setPinned(address, true)
+            backend.actions.markSeen(address, 7)
+            val marked = backend.snapshot().find(address)!!.second
+            assertTrue(marked.pinned)
+            assertEquals(7L, marked.seen)
+            backend.actions.setPinned(address, false)
+            assertTrue(!backend.snapshot().find(address)!!.second.pinned)
+            backend.actions.markSeen("t" + "9".repeat(9), 1)
         } finally {
             // Put the layout back, then end and remove the terminal.
             runCatching {

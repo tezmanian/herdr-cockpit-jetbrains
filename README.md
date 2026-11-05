@@ -154,8 +154,9 @@ IDE running on Windows can't reach a socket inside WSL. This setup isn't tested 
   `HERDR_SESSION`, else `~/.config/herdr/herdr.sock`; a path `…/sessions/<name>/herdr.sock` selects that named
   session.
 - **Herdr version**: *Automatic* uses Herdr 1 when it answers, else Herdr 2 (herdr-core with the Herdr app);
-  *Herdr 1* or *Herdr 2 (experimental)* use only that one. Herdr 2 is read-only apart from its terminals: the
-  sidebar mirrors the Herdr app's window and opens terminals with `hc attach`; spaces, tabs and panes are made in
+  *Herdr 1* or *Herdr 2 (experimental)* use only that one. Herdr 2 is read-only apart from its terminals and
+  markers: the sidebar mirrors the Herdr app's window and opens terminals with `hc attach`; looking at an agent's
+  tab marks its "done" seen, and the pane menu has *Pin* / *Unpin* and *Mark Unread*, shared with the app; spaces, tabs and panes are made in
   the app, and agent prompts, reviews with agents, worktrees and links from Herdr need Herdr 1. The **hc binary**
   and **Core socket** fields are for Herdr 2 (empty: `hc` on PATH, `HC_SOCKET`, else the core's default session
   socket); switching, following and closing settings apply to Herdr 1 only.

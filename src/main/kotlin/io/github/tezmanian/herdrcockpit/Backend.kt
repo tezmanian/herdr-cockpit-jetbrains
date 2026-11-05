@@ -75,7 +75,6 @@ interface BackendActions {
     fun startAgent(paneId: String, kind: String, name: String): Unit = unsupported(Capability.agentStart)
 
     fun markSeen(paneId: String, turn: Long): Unit = unsupported(Capability.seenMarkers)
-    fun markUnread(paneId: String): Unit = unsupported(Capability.seenMarkers)
     fun setPinned(paneId: String, pinned: Boolean): Unit = unsupported(Capability.pins)
 }
 

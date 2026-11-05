@@ -38,6 +38,9 @@ data class Pane(
     val agentName: String?,
     /** Pinned in Herdr 2 (`herdr.pinned`): sorts first among the agents. Herdr 1 has no pins. */
     val pinned: Boolean = false,
+    /** Herdr 2: the agent's finished turns, and the last one a client saw (`herdr.seen`, null = never marked). */
+    val turn: Long = 0,
+    val seen: Long? = null,
 )
 
 data class Tab(val id: String, val workspaceId: String, val label: String, val panes: MutableList<Pane> = mutableListOf())

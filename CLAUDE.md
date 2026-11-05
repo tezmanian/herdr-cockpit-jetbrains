@@ -46,7 +46,7 @@ Package `io.github.tezmanian.herdrcockpit`. The README's "Layout" table lists th
 **Backends:** everything that depends on the Herdr version sits behind `Backend` (Backend.kt): snapshot, event
 subscription, diagnosis, the pane stream command and the actions (`BackendActions`). `HerdrService.backend` is
 `Herdr1Backend` or `Herdr2Backend` (experimental; herdr-core plus the Herdr app's layout document, read-only apart
-from attach), chosen by the `herdrVersion` setting on every connect (`chooseBackend()`). The UI offers only what
+from attach and the `herdr.seen`/`herdr.pinned` labels; `SeenTracker`), chosen by the `herdrVersion` setting on every connect (`chooseBackend()`). The UI offers only what
 `backend.capabilities` lists (`HerdrService.has(...)`); `BackendActions` methods outside them throw `Unsupported`. Backend files have no IntelliJ imports; settings come in as
 functions.
 
